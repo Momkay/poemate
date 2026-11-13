@@ -175,6 +175,16 @@ impl Session {
         flags_for(bandit, self.league_start)
     }
 
+    /// Back to the plain campaign route: no build, no stage choice, and the bandit falls back to "kill all".
+    fn clear_build(&mut self) {
+        let _ = std::fs::remove_file(self.cfg.join(BUILD_FILE));
+        self.plan = None;
+        self.stage_override = None;
+        self.auto_stage = None;
+        self.reflag();
+        self.save_progress();
+    }
+
     /// Call after the bandit, the side-quest variant or the build changed: new flags, and the cursor stays on its step.
     fn reflag(&mut self) {
         let new = self.effective_flags();
@@ -442,6 +452,10 @@ pub fn import(input: &str) -> Result<ImportSummary, String> {
     Ok(install(plan, false))
 }
 
+pub fn remove_build() {
+    SESSION.lock().unwrap().clear_build();
+}
+
 /// Blocking: reload the build saved by the last import, if any.
 pub fn restore() {
     let cfg = SESSION.lock().unwrap().cfg.clone();
@@ -577,6 +591,22 @@ mod tests {
         two.reflag();
         two.on_event(&Event::CharacterDetected { name: "Ranger".into(), class: "Ranger".into() }, 30);
         assert!(std::ptr::eq(two.engine().current().unwrap(), step));
+    }
+
+    #[test]
+    fn removing_the_build_leaves_the_plain_route_and_forgets_the_file() {
+        let t = tempfile::tempdir().unwrap();
+        let mut s = session_with_plan(t.path());
+        std::fs::write(t.path().join(BUILD_FILE), "saved build").unwrap();
+        s.reflag();
+        s.cursor = ROUTE.steps.iter().filter(|x| x.applies(&s.flags)).position(|x| x.act == 3).unwrap() + 2;
+        let step = s.engine().current().unwrap() as *const crate::route::Step;
+        s.clear_build();
+        assert!(s.plan.is_none() && !t.path().join(BUILD_FILE).exists());
+        let v = s.views(40);
+        assert!(v.plan.is_none() && v.route.is_some());
+        assert!(s.flags.contains("BANDIT_KILL"), "no build: kill all");
+        assert!(std::ptr::eq(s.engine().current().unwrap(), step), "the route position stays");
     }
 
     #[test]

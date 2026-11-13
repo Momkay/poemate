@@ -168,6 +168,11 @@
     } catch {}
   }
 
+  async function removeBuild() {
+    await invoke("remove_build");
+    importMsg = t("removed");
+  }
+
   async function doImport() {
     if (!input.trim() || busy) return;
     busy = true;
@@ -384,6 +389,7 @@
           <button onclick={() => invoke("route_step", { delta: -1 })}>{t("stepPrev")}</button>
           <button onclick={() => invoke("route_step", { delta: 1 })}>{t("stepNext")}</button>
         </div>
+        {#if plan}<div class="row"><button class="plain" onclick={removeBuild}>{t("removeBuild")}</button></div>{/if}
         {#if importMsg}<p class="next">{importMsg}</p>{/if}
         <label class="slider">{t("opacity")}
           <input type="range" min="0.2" max="1" step="0.05" bind:value={layout.settings.opacity} oninput={saveSoon} />
@@ -923,6 +929,12 @@
   }
   .row button:first-child:hover:not(:disabled) {
     background: #52b5a3;
+  }
+  .row button.plain {
+    background: #3a4f58;
+  }
+  .row button.plain:hover:not(:disabled) {
+    background: #5d7a84;
   }
   button:disabled {
     opacity: 0.5;

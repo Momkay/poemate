@@ -97,6 +97,7 @@ Commands assumed: `cargo test`, `npm run build`, `npm run tauri dev`.
 - [x] **Play without a build** — the route works on its own; the flags used to be empty, which dropped the bandit steps of acts 2 and 10.
 - [x] **Client.txt picker** — paste a path in edit mode when the log is not found; the watcher picks it up within 5 s.
 - [x] **Progress per act** — "Act 1 · 3 / 40" instead of the whole route.
+- [x] **Remove build** — a button in edit mode returns to the plain campaign route (deletes the saved build, bandit falls back to kill all, the route position stays).
 - [ ] **Still open from this round** — vendor recipes and the bandit choice in the town chip; "points spent" correction; a browse button for Client.txt.
 
 ## Parallelizable
