@@ -71,7 +71,23 @@
     w = Math.max(w, h / 0.43);
     return { vb: `${(x0 + x1) / 2 - w / 2} ${(y0 + y1) / 2 - h / 2} ${w} ${h}`, w, next: focus[0] };
   });
-  const changedGear = $derived(plan?.gear.filter((g) => g.changed) ?? []);
+  // link groups with the active skill first, supports after it in PoB order
+  const links = $derived(
+    (plan?.gems ?? [])
+      .map((g) => [...g.filter((x) => !x.support), ...g.filter((x) => x.support)])
+      .filter((g) => g.length),
+  );
+  const changedGear =$derived(plan?.gear.filter((g) => g.changed) ?? []);
+
+  let copied = $state("");
+  // write-only and only on a user click, so it stays within the GGG overlay rules
+  async function copySearch(g: { slot: string; name: string; base: string }) {
+    try {
+      await navigator.clipboard.writeText(`"${g.name || g.base}"`);
+      copied = g.slot;
+      setTimeout(() => (copied = ""), 1200);
+    } catch {}
+  }
 
   async function doImport() {
     if (!input.trim() || busy) return;
@@ -195,11 +211,21 @@
       </section>
       </Widget>
 
-      {#if plan.new_gems.length}
+      {#if links.length}
         <Widget id="gems" {edit}>
         <section class="card">
-          <header><span class="eyebrow">New gems</span></header>
-          <div class="chips">{#each plan.new_gems as g}<span class="chip">{g}</span>{/each}</div>
+          <header>
+            <span class="eyebrow">Gems</span>
+            {#if plan.new_gems.length}<span class="badge">{plan.new_gems.length} new</span>{/if}
+          </header>
+          {#each links.slice(0, panel ? 12 : 5) as grp}
+            <div class="chips">
+              {#each grp as g}
+                <span class="chip" class:support={g.support} class:new={plan.new_gems.includes(g.name)}>{g.name}</span>
+              {/each}
+            </div>
+          {/each}
+          {#if links.length > (panel ? 12 : 5)}<p class="next">+{links.length - (panel ? 12 : 5)} more links</p>{/if}
         </section>
         </Widget>
       {/if}
@@ -210,9 +236,14 @@
           <header><span class="eyebrow">Gear to look for</span></header>
           <ul class="list">
             {#each changedGear.slice(0, 6) as g}
-              <li><span class="slot">{g.slot}</span><span class="name">{g.name}{g.base ? ` · ${g.base}` : ""}</span></li>
+              <li class:copied={copied === g.slot}>
+                <button class="copy" title="Copy the stash search" onclick={() => copySearch(g)}>
+                  <span class="slot">{g.slot}</span><span class="name">{g.name}{g.base ? ` · ${g.base}` : ""}</span>
+                </button>
+              </li>
             {/each}
           </ul>
+          <p class="hint">Click an item to copy its stash search</p>
         </section>
         </Widget>
       {/if}
@@ -618,6 +649,32 @@
     font-size: 12px;
     font-weight: 500;
     color: var(--strong);
+  }
+  button.copy {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    background: none;
+    text-align: left;
+  }
+  button.copy:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .list li.copied {
+    background: var(--green);
+  }
+  .chip.support {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px rgb(var(--bg-2));
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .chip.new {
+    background: var(--green);
+    box-shadow: none;
+    color: #fff;
   }
   .hint,
   .foot {
