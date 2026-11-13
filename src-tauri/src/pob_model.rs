@@ -279,6 +279,29 @@ mod tests {
         assert_eq!(b.active_spec, 5); // "6) ENDGAME SETUP"
     }
 
+    /// Cheap stand-in for a fuzz run: mutated and truncated copies of a real build must never panic.
+    #[test]
+    fn mutated_real_build_never_panics() {
+        let xml = crate::pob_source::import(include_str!("../../fixtures/pob/real1.txt")).unwrap();
+        let bytes = xml.as_bytes();
+        let mut seed = 0x9E3779B97F4A7C15u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed as usize
+        };
+        for _ in 0..300 {
+            let mut b = bytes.to_vec();
+            for _ in 0..1 + next() % 8 {
+                let i = next() % b.len();
+                b[i] = (next() % 256) as u8;
+            }
+            b.truncate(1 + next() % b.len());
+            let _ = parse(&String::from_utf8_lossy(&b));
+        }
+    }
+
     #[test]
     fn real_build_gems() {
         let b = real();

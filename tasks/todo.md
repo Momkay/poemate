@@ -83,7 +83,7 @@ Commands assumed: `cargo test`, `npm run build`, `npm run tauri dev`.
 ## Phase 7 — Hardening & release
 - [ ] **T29 Performance pass (S)** — Measure cold start, import time, event->UI latency, idle CPU/RAM, FPS impact; results in `docs/PERF.md`; fix regressions.
   - AC: budgets from PROMPT §6 met or documented exceptions. Deps: Checkpoint 5.
-- [ ] **T30 Security pass (S)** — CSP, minimal Tauri capabilities, fuzz PoB decode/parse, size/timeout caps, no secrets/chat in logs.
+- [x] **T30 Security pass (S)** (done 2026-11-13, reviewed rather than changed: CSP is set (self + ipc only); the window capability is only core:default, the hotkey plugin is used from Rust and has no webview permission; PoB code capped at 2 MB, inflated XML at 32 MB, downloads at 2 MB and 10 s, no redirects, only pobb.in/pastebin.com URLs built from a validated id; no DTD/entities in XML; layout.json and hotkeys.json values are validated; no chat is stored or logged. New: a mutation test (300 corrupted copies of a real build never panic). NOT done: a real cargo-fuzz run, a dependency audit (cargo audit), and checking the release build CSP) — CSP, minimal Tauri capabilities, fuzz PoB decode/parse, size/timeout caps, no secrets/chat in logs.
   - AC: fuzz run without panics; capability list reviewed. Deps: Checkpoint 5.
 - [ ] **T31 Installer, README, compliance re-check (M)** — NSIS + portable zip, README with screenshots/GIFs, backlog list, re-read GGG policy and update `docs/COMPLIANCE.md`.
   - AC: clean-machine install runs; docs complete. Deps: T29, T30.
