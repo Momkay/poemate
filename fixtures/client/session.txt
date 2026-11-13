@@ -1,0 +1,21 @@
+2026/11/13 20:01:02 1000001 cffb0719 [INFO Client 4242] Connecting to instance server at 203.0.113.10:6112
+2026/11/13 20:01:03 1000900 1186a0ad [DEBUG Client 4242] Generating level 1 area "1_1_town" with seed 3011223344
+2026/11/13 20:01:04 1001000 cffb0719 [INFO Client 4242] : You have entered Lioneye's Watch.
+2026/11/13 20:01:30 1030000 cffb0719 [INFO Client 4242] @From SomeFriend: hey, you free? Generating level 99 area "9_9_9" with seed 1
+2026/11/13 20:02:10 1070000 1186a0ad [DEBUG Client 4242] Generating level 1 area "1_1_1" with seed 2200110022
+2026/11/13 20:02:11 1070100 cffb0719 [INFO Client 4242] : You have entered The Twilight Strand.
+2026/11/13 20:02:40 1100000 cffb0719 [INFO Client 4242] #SpamBot: : You have entered Oriath.
+2026/11/13 20:03:05 1125000 cffb0719 [INFO Client 4242] : Mateusz (Marauder) is now level 2
+2026/11/13 20:03:50 1170000 cffb0719 [INFO Client 4242] %PartyMember: : Fake (Witch) is now level 90
+2026/11/13 20:04:15 1195000 cffb0719 [INFO Client 4242] : Mateusz has been slain.
+2026/11/13 20:04:16 1195100 cffb0719 [INFO Client 4242] : SomeoneElse has been slain.
+2026/11/13 20:04:40 1220000 cffb0719 [INFO Client 4242] : Mateusz (Marauder) is now level 2
+2026/11/13 20:05:00 1240000 1186a0ad [DEBUG Client 4242] Generating level 1 area "1_1_town" with seed 5566778899
+2026/11/13 20:05:01 1240100 cffb0719 [INFO Client 4242] : You have entered Lioneye's Watch.
+2026/11/13 20:06:00 1300000 1186a0ad [DEBUG Client 4242] Generating level 2 area "1_1_2" with seed 1357913579
+2026/11/13 20:06:01 1300100 cffb0719 [INFO Client 4242] : You have entered The Coast.
+2026/11/13 20:07:00 1360000 cffb0719 [INFO Client 4242] : Mateusz (Marauder) is now level 3
+2026/11/13 20:20:00 2000000 1186a0ad [DEBUG Client 4242] Generating level 68 area "HideoutShaped" with seed 42
+2026/11/13 20:20:01 2000100 cffb0719 [INFO Client 4242] : You have entered Shaped Hideout.
+2026/11/13 20:30:00 2600000 cffb0719 [INFO Client 4242] : Mateusz (Juggernaut) is now level 4
+2026/11/13 20:31:00 2660000 cffb0719 [INFO Client 4242] : OtherChar (Witch) is now level 5
