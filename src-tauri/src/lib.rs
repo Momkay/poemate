@@ -119,7 +119,7 @@ fn spawn_tracker(w: WebviewWindow) {
             std::thread::sleep(Duration::from_millis(400));
             let poe = poe_window::probe();
             watcher::ACTIVE.store(
-                poe.as_ref().is_none_or(|p| p.foreground || p.foreground_is(ours)),
+                always_show || poe.as_ref().is_none_or(|p| p.foreground || p.foreground_is(ours)),
                 Ordering::Relaxed,
             );
             let want = !HIDDEN.load(Ordering::Relaxed)
