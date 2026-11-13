@@ -67,6 +67,17 @@ pub struct PassiveView {
     pub available: bool,
 }
 
+/// One node of the mini tree: where it sits, the allocated neighbour it hangs off, and when it is taken.
+#[derive(Serialize, Clone, PartialEq, Debug)]
+pub struct TreeDot {
+    pub x: f32,
+    pub y: f32,
+    pub from: Option<(f32, f32)>,
+    pub kind: tree::Kind,
+    /// "done" (earlier stages), "now" (affordable in this stage), "later" (this stage, not affordable yet)
+    pub state: &'static str,
+}
+
 #[derive(Serialize, Clone, PartialEq, Debug)]
 pub struct GemView {
     pub name: String,
@@ -98,6 +109,7 @@ pub struct PlanView {
     /// points the earlier stages of the plan already use
     pub spent_before: u32,
     pub passives: Vec<PassiveView>,
+    pub tree: Vec<TreeDot>,
     pub masteries: Vec<(String, Vec<String>)>,
     pub new_gems: Vec<String>,
     pub gems: Vec<Vec<GemView>>,
@@ -239,6 +251,13 @@ impl Session {
                 ascendancy: p.ascendancy.clone(),
                 bandit: p.bandit.clone(),
                 passives_total: s.passives.len(),
+                tree: {
+                    // ascendancy nodes sit on their own panel far from the main tree: they would blow up the crop
+                    let dot = |x: &crate::tree::Step, state| Some(TreeDot { x: x.pos?.0, y: x.pos?.1, from: x.from, kind: x.kind, state }).filter(|_| x.ascendancy.is_none());
+                    let done = p.stages[..stage].iter().flat_map(|st| &st.passives).filter_map(|x| dot(x, "done"));
+                    let now = s.passives.iter().zip(&available).filter_map(|(x, a)| dot(x, if *a { "now" } else { "later" }));
+                    done.chain(now).collect()
+                },
                 passives: s
                     .passives
                     .iter()

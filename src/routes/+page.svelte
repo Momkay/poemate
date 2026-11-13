@@ -31,6 +31,7 @@
         passives_available: number;
         budget: number | null;
         spent_before: number;
+        tree: { x: number; y: number; from: [number, number] | null; kind: Kind; state: "done" | "now" | "later" }[];
         passives: { name: string; kind: Kind; stats: string[]; known: boolean; available: boolean }[];
         masteries: [string, string[]][];
         new_gems: string[];
@@ -57,6 +58,19 @@
       .map((k) => [k, plan?.passives.filter((p) => p.kind === k).length ?? 0] as const)
       .filter(([, n]) => n > 0),
   );
+  // crop of the tree around what is taken next, keeping the panel's 560:240 shape
+  const crop = $derived.by(() => {
+    const dots = plan?.tree ?? [];
+    const focus = dots.filter((d) => d.state === "now");
+    const pts = (focus.length ? focus : dots.filter((d) => d.state === "later")).flatMap((d) => (d.from ? [[d.x, d.y], d.from] : [[d.x, d.y]]));
+    if (!pts.length) return null;
+    const [x0, x1] = [Math.min(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[0]))];
+    const [y0, y1] = [Math.min(...pts.map((q) => q[1])), Math.max(...pts.map((q) => q[1]))];
+    let w = Math.max(x1 - x0 + 700, 1100);
+    let h = Math.max(y1 - y0 + 700, w * 0.43);
+    w = Math.max(w, h / 0.43);
+    return { vb: `${(x0 + x1) / 2 - w / 2} ${(y0 + y1) / 2 - h / 2} ${w} ${h}`, w, next: focus[0] };
+  });
   const changedGear = $derived(plan?.gear.filter((g) => g.changed) ?? []);
 
   async function doImport() {
@@ -146,6 +160,17 @@
           <p class="stages">
             {#each plan.stages as s, i}<span class:cur={i === plan.stage}>{s}</span>{/each}
           </p>
+        {/if}
+        {#if panel && crop && plan}
+          <svg class="mini" viewBox={crop.vb} role="img" aria-label="Passive tree around the next points to take">
+            {#each plan.tree as d}
+              {#if d.from}<line x1={d.from[0]} y1={d.from[1]} x2={d.x} y2={d.y} class="l {d.state}" />{/if}
+            {/each}
+            {#each plan.tree as d}
+              <circle cx={d.x} cy={d.y} r={d.kind === "Keystone" ? 36 : d.kind === "Normal" ? 17 : 27} class="n {d.state} {d.kind.toLowerCase()}" />
+            {/each}
+            {#if crop.next}<circle cx={crop.next.x} cy={crop.next.y} r="52" class="ring" />{/if}
+          </svg>
         {/if}
         {#if plan.budget !== null}
           <p class="next">≈ {Math.max(0, plan.budget - plan.spent_before)} points to spend (level − 1 + quests)</p>
@@ -501,6 +526,47 @@
   .panel .list {
     grid-template-columns: 1fr 1fr;
     column-gap: 12px;
+  }
+  .mini {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    border-radius: 6px;
+    background: rgb(var(--bg-0));
+  }
+  .mini .l {
+    stroke: #3a3c41;
+    stroke-width: 7;
+  }
+  .mini .l.now,
+  .mini .l.later {
+    stroke: #6d6f78;
+  }
+  .mini .n {
+    fill: #4e5058;
+  }
+  .mini .n.later {
+    fill: none;
+    stroke: #6d6f78;
+    stroke-width: 6;
+  }
+  .mini .n.now {
+    fill: var(--strong);
+  }
+  .mini .n.now.notable {
+    fill: var(--yellow);
+  }
+  .mini .n.now.keystone {
+    fill: var(--red);
+  }
+  .mini .n.now.mastery,
+  .mini .n.now.jewel {
+    fill: var(--blurple);
+  }
+  .mini .ring {
+    fill: none;
+    stroke: var(--strong);
+    stroke-width: 7;
   }
   .counts,
   .stages {

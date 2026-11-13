@@ -32,6 +32,8 @@ pub struct Node {
     pub kind: Kind,
     pub stats: Vec<String>,
     pub ascendancy: Option<String>,
+    /// tree coordinates; None when the data has no group layout (old cache, test fixtures)
+    pub pos: Option<(f32, f32)>,
     #[serde(skip)]
     links: Vec<u32>,
     #[serde(skip)]
@@ -41,6 +43,37 @@ pub struct Node {
 #[derive(Deserialize)]
 struct RawFile {
     nodes: HashMap<String, RawNode>,
+    #[serde(default)]
+    groups: HashMap<String, RawGroup>,
+    #[serde(default)]
+    constants: RawConstants,
+}
+
+#[derive(Deserialize, Default)]
+struct RawGroup {
+    x: f32,
+    y: f32,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct RawConstants {
+    skills_per_orbit: Vec<u32>,
+    orbit_radii: Vec<f32>,
+}
+
+/// Angle in degrees of slot `i` on an orbit of `n` slots: GGG draws the 16 and 40 slot orbits with uneven spacing.
+fn orbit_angle(n: u32, i: u32) -> f32 {
+    const O16: [f32; 16] = [0., 30., 45., 60., 90., 120., 135., 150., 180., 210., 225., 240., 270., 300., 315., 330.];
+    const O40: [f32; 40] = [
+        0., 10., 20., 30., 40., 45., 50., 60., 70., 80., 90., 100., 110., 120., 130., 135., 140., 150., 160., 170., 180., 190., 200., 210., 220., 225.,
+        230., 240., 250., 260., 270., 280., 290., 300., 310., 315., 320., 330., 340., 350.,
+    ];
+    match n {
+        16 => O16[i as usize % 16],
+        40 => O40[i as usize % 40],
+        _ => 360. * i as f32 / n.max(1) as f32,
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -55,6 +88,9 @@ struct RawNode {
     is_jewel_socket: bool,
     ascendancy_name: Option<String>,
     is_ascendancy_start: bool,
+    group: Option<u32>,
+    orbit: usize,
+    orbit_index: u32,
     class_start_index: Option<u32>,
     out: Vec<String>,
     #[serde(rename = "in")]
@@ -82,6 +118,7 @@ pub enum TreeError {
 impl TreeData {
     pub fn from_json(json: &str) -> Result<Self, TreeError> {
         let raw: RawFile = serde_json::from_str(json).map_err(|_| TreeError::Parse)?;
+        let (groups, consts) = (raw.groups, raw.constants);
         let nodes = raw
             .nodes
             .into_values()
@@ -102,7 +139,13 @@ impl TreeData {
                 };
                 let links = n.out.iter().chain(&n.inn).filter_map(|s| s.parse().ok()).collect();
                 let effects = n.mastery_effects.into_iter().map(|e| (e.effect, e.stats)).collect();
-                (n.skill, Node { id: n.skill, name: n.name, kind, stats: n.stats, ascendancy: n.ascendancy_name, links, effects })
+                let pos = n.group.and_then(|g| groups.get(&g.to_string())).and_then(|g| {
+                    let per = *consts.skills_per_orbit.get(n.orbit)?;
+                    let r = *consts.orbit_radii.get(n.orbit)?;
+                    let a = orbit_angle(per, n.orbit_index).to_radians();
+                    Some((g.x + r * a.sin(), g.y - r * a.cos()))
+                });
+                (n.skill, Node { id: n.skill, name: n.name, kind, stats: n.stats, ascendancy: n.ascendancy_name, pos, links, effects })
             })
             .collect();
         Ok(Self { nodes })
@@ -169,11 +212,14 @@ pub struct Step {
     pub stats: Vec<String>,
     pub ascendancy: Option<String>,
     pub known: bool,
+    /// where the node sits on the tree, and where the allocated neighbour it hangs off sits (for the mini tree)
+    pub pos: Option<(f32, f32)>,
+    pub from: Option<(f32, f32)>,
 }
 
 fn step(tree: &TreeData, id: u32) -> Step {
     match tree.node(id) {
-        Some(n) => Step { id, name: n.name.clone(), kind: n.kind, stats: n.stats.clone(), ascendancy: n.ascendancy.clone(), known: true },
+        Some(n) => Step { id, name: n.name.clone(), kind: n.kind, stats: n.stats.clone(), ascendancy: n.ascendancy.clone(), known: true, pos: n.pos, from: None },
         None => Step {
             id,
             name: if id > 65535 { "Cluster jewel passive".into() } else { format!("Unknown passive #{id}") },
@@ -181,6 +227,8 @@ fn step(tree: &TreeData, id: u32) -> Step {
             stats: Vec::new(),
             ascendancy: None,
             known: false,
+            pos: None,
+            from: None,
         },
     }
 }
@@ -238,8 +286,10 @@ pub fn take_order(tree: &TreeData, prev: Option<&Spec>, next: &Spec) -> Vec<Step
             .min_by_key(|&i| (steps_to_notable(tree, todo[i], &left), todo[i]));
         let Some(i) = next_idx else { break };
         let id = todo.remove(i);
+        let mut st = step(tree, id);
+        st.from = tree.node(id).and_then(|n| n.links.iter().filter(|l| have.contains(l)).filter_map(|l| tree.node(*l)?.pos).next());
         have.insert(id);
-        out.push(step(tree, id));
+        out.push(st);
     }
     out.extend(todo.into_iter().map(|id| step(tree, id)));
     out
@@ -322,6 +372,17 @@ mod tests {
         assert_eq!(steps.len(), 3);
         assert!(steps.iter().any(|s| s.id == 70_000 && s.name == "Cluster jewel passive" && !s.known));
         assert!(steps.iter().any(|s| s.id == 60_001 && s.name == "Unknown passive #60001" && !s.known));
+    }
+
+    #[test]
+    fn positions_come_from_group_orbit_and_slot() {
+        let json = r#"{"nodes":{"1":{"skill":1,"group":1,"orbit":2,"orbitIndex":4},"2":{"skill":2,"group":1,"orbit":0}},
+            "groups":{"1":{"x":1000,"y":2000}},"constants":{"skillsPerOrbit":[1,6,16],"orbitRadii":[0,82,162]}}"#;
+        let t = TreeData::from_json(json).unwrap();
+        let (x, y) = t.node(1).unwrap().pos.unwrap(); // slot 4 of 16 = 90 degrees: due east of the group
+        assert!((x - 1162.).abs() < 0.01 && (y - 2000.).abs() < 0.01, "{x},{y}");
+        assert_eq!(t.node(2).unwrap().pos, Some((1000., 2000.)));
+        assert_eq!(tree().node(41536).unwrap().pos, None); // fixture has no layout: no position, no crash
     }
 
     #[test]
