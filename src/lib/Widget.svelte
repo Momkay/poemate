@@ -72,6 +72,6 @@
     touch-action: none;
   }
   .widget.edit :global(.card) {
-    outline: 1px dashed rgba(111, 211, 192, 0.5);
+    outline: 1px dashed rgba(236, 233, 226, 0.4);
   }
 </style>

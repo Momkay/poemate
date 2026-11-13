@@ -447,20 +447,21 @@
 </main>
 
 <style>
-  /* Chart-room look: blue-black ink stepped by tone, one sea-glass accent for "now" and "gain", a serif for titles
-     (the game's own face is a serif), soft corners, arrows for the route ahead; no blur, no pills, no avatars */
+  /* Game-first look. While playing there are no panels: text sits straight on the game with a soft edge for
+     legibility and a very faint scrim (the Opacity setting). Only what you operate (settings, the T panel, toasts)
+     is a solid surface. One neutral ink, one sage accent that means "now" or "gain", one amber and one red for
+     warnings. One typeface; three sizes do the work: 17 for the step, 13-14 for text, 12 for notes. */
   :global(:root) {
-    --bg-0: 9, 14, 17;
-    --bg-1: 17, 26, 31;
-    --bg-2: 29, 42, 49;
-    --hover: #2c3d45;
-    --text: #d3e0e2;
-    --strong: #f1f8f8;
-    --muted: #7e969c;
-    --accent: #6fd3c0;
-    --green: #6fd3c0;
-    --yellow: #e3b657;
-    --red: #e8705a;
+    --ink: #ece9e2;
+    --ink-2: rgba(236, 233, 226, 0.62);
+    --ink-3: rgba(236, 233, 226, 0.42);
+    --accent: #8fc9a6;
+    --warn: #d9b36a;
+    --bad: #d9755f;
+    --surface: 20, 22, 25;
+    --surface-2: 36, 39, 43;
+    --hover: #30353b;
+    --edge: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.55);
   }
   :global(html, body) {
     margin: 0;
@@ -468,152 +469,151 @@
     overflow: hidden;
     font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     font-size: 14px;
-    color: var(--text);
+    color: var(--ink);
     user-select: none;
   }
   main {
     position: fixed;
     inset: 0;
     padding: 18px;
-    outline: 2px solid transparent;
-    outline-offset: -2px;
+    outline: 1px dashed transparent;
+    outline-offset: -3px;
     transition: outline-color 0.15s ease-out;
   }
   main.edit {
-    outline-color: rgba(88, 101, 242, 0.7);
+    outline-color: rgba(236, 233, 226, 0.3);
   }
   .col {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     width: 300px;
-    margin-top: 56px;
+    margin-top: 40px;
+    text-shadow: var(--edge);
   }
-  .hud,
-  .card {
-    background: rgba(var(--bg-1), var(--alpha, 0.92));
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  .compact .col {
+    gap: 6px;
   }
+
+  /* top centre: level and zone as plain text */
   .hud {
     position: absolute;
     top: 14px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
-    padding: 4px 12px 4px 4px;
-    border-radius: 10px;
     font-size: 13px;
-    font-weight: 500;
     font-variant-numeric: tabular-nums;
-    color: var(--strong);
+    white-space: nowrap;
+    text-shadow: var(--edge);
   }
   .lvl {
-    display: grid;
-    place-items: center;
-    min-width: 24px;
-    height: 24px;
-    padding: 0 4px;
-    box-sizing: border-box;
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--accent);
   }
+  .area {
+    color: var(--ink);
+  }
   .alvl {
-    color: var(--muted);
-    font-weight: 400;
+    color: var(--ink-3);
   }
   .status {
-    padding-left: 8px;
-    color: var(--yellow);
+    color: var(--warn);
   }
   .sep {
     display: none;
   }
+
+  /* the cards: no frame, a faint scrim */
   .card {
-    padding: 12px;
-    border-radius: 10px;
-    animation: in 0.16s ease-out;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, calc(var(--alpha, 0.72) * 0.4));
+    animation: in 0.14s ease-out;
   }
   .compact .card {
-    padding: 8px 10px;
+    padding: 6px 8px;
   }
-  .compact .col {
-    gap: 5px;
-  }
-  .compact h1 {
-    font-size: 15px;
+  p {
+    margin: 0;
   }
   header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
   }
   .eyebrow {
     font-size: 13px;
     font-weight: 600;
-    color: var(--muted);
+    color: var(--ink-2);
   }
   .meta {
     font-size: 12px;
     font-variant-numeric: tabular-nums;
-    color: var(--muted);
+    color: var(--ink-3);
     white-space: nowrap;
   }
   .meta.gain {
-    color: var(--green);
+    color: var(--accent);
+  }
+
+  /* route */
+  .where {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-3);
   }
   h1 {
     margin: 2px 0 2px;
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.25;
-    color: var(--strong);
+    color: var(--ink);
   }
-  p {
-    margin: 0;
+  .compact h1 {
+    font-size: 15px;
+  }
+  .step {
+    animation: tick 0.3s ease-out;
   }
   .label {
     font-size: 13px;
-    color: var(--muted);
-  }
-  .hint-line {
-    margin-top: 6px;
-    font-size: 13px;
+    color: var(--ink-2);
   }
   .points {
-    margin-top: 6px;
+    margin-top: 4px;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--yellow);
+    color: var(--accent);
   }
-  .locked {
-    opacity: 0.55;
+  .reward {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 6px;
+    line-height: 1.3;
   }
   .reward b {
     font-size: 14px;
-    color: var(--strong);
+    font-weight: 600;
+    color: var(--ink);
   }
   .reward span {
     font-size: 12px;
-    color: var(--muted);
+    color: var(--ink-2);
   }
-  .reward {
-    display: grid;
-    gap: 1px;
-    margin-top: 10px;
-    line-height: 1.3;
-  }
-  /* the route as a trail: the current step is the title, the steps ahead follow behind arrows */
   .next {
-    margin-top: 6px;
-    font-size: 12px;
-    color: var(--muted);
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--ink-2);
   }
+
+  /* lists: passives, gear */
   .list {
-    margin: 8px 0 0;
+    margin: 6px 0 0;
     padding: 0;
     list-style: none;
     display: grid;
@@ -623,93 +623,182 @@
   .list li {
     display: flex;
     gap: 8px;
-    align-items: center;
+    align-items: baseline;
     flex-wrap: wrap;
-    padding: 3px 6px 3px 4px;
-    border-radius: 4px;
   }
   .glyph {
     flex: none;
-    width: 14px;
-    font-size: 12px;
+    width: 12px;
+    font-size: 11px;
     text-align: center;
-    color: var(--muted);
+    color: var(--ink-3);
   }
   .notable .glyph {
-    color: var(--yellow);
+    color: var(--warn);
   }
   .keystone .glyph {
-    color: var(--red);
+    color: var(--bad);
   }
   .mastery .glyph,
   .jewel .glyph {
     color: var(--accent);
   }
   .name {
-    font-weight: 500;
-    color: var(--strong);
+    color: var(--ink);
   }
   .stat {
     flex-basis: 100%;
-    padding-left: 28px;
-    margin-top: -3px;
+    padding-left: 20px;
     font-size: 12px;
-    color: var(--muted);
+    color: var(--ink-2);
+  }
+  .locked {
+    opacity: 0.5;
   }
   p.mastery {
-    margin-top: 8px;
+    margin-top: 6px;
     font-size: 12px;
-    color: var(--green);
+    color: var(--accent);
   }
-  .settings {
-    position: absolute;
-    right: 18px;
-    bottom: 19vh; /* above the game's mana orb */
+  .slot {
+    min-width: 84px;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  .grp {
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--ink);
+  }
+  .grp .support {
+    color: var(--ink-2);
+  }
+  .grp .new {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  button.copy {
     display: flex;
-    flex-direction: column;
     gap: 8px;
-    width: 300px;
-    max-height: calc(81vh - 18px);
-    overflow-y: auto;
+    align-items: baseline;
+    width: 100%;
+    padding: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    text-shadow: inherit;
   }
+  button.copy:hover:not(:disabled) {
+    background: none;
+    color: var(--accent);
+  }
+  .copied .name {
+    color: var(--accent);
+  }
+  .hint,
+  .foot {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+  .foot {
+    margin-top: 0;
+    text-align: right;
+    text-shadow: var(--edge);
+  }
+  .warn {
+    color: var(--warn);
+  }
+
+  /* toasts */
+  .toasts {
+    position: absolute;
+    top: 38px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+  .toast {
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(var(--surface), 0.92);
+    font-size: 13px;
+    color: var(--ink);
+    animation: in 0.14s ease-out;
+  }
+
+  /* on demand: the T panel, notes, and everything you operate. These are solid. */
   .card.panel {
     width: 560px;
+  }
+  .card.panel,
+  .card.notes,
+  .settings .card {
+    background: rgba(var(--surface), 0.94);
+    text-shadow: none;
   }
   .panel .list {
     grid-template-columns: 1fr 1fr;
     column-gap: 12px;
   }
+  .counts,
+  .stages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  .counts span {
+    color: var(--ink-2);
+  }
+  .counts .notable {
+    color: var(--warn);
+  }
+  .counts .keystone {
+    color: var(--bad);
+  }
+  .stages span {
+    color: var(--ink-3);
+  }
+  .stages .cur {
+    color: var(--ink);
+    font-weight: 600;
+  }
   .mini {
     display: block;
     width: 100%;
     margin-top: 8px;
-    border-radius: 6px;
-    background: rgb(var(--bg-0));
+    border-radius: 4px;
+    background: rgb(12, 13, 15);
   }
   .mini .l {
-    stroke: #25353c;
+    stroke: #2c3136;
     stroke-width: 7;
   }
   .mini .l.now,
   .mini .l.later {
-    stroke: #5d7a84;
+    stroke: #59616a;
   }
   .mini .n {
-    fill: #3a4f58;
+    fill: #3a4046;
   }
   .mini .n.later {
     fill: none;
-    stroke: #5d7a84;
+    stroke: #59616a;
     stroke-width: 6;
   }
   .mini .n.now {
-    fill: var(--strong);
+    fill: var(--ink);
   }
   .mini .n.now.notable {
-    fill: var(--yellow);
+    fill: var(--warn);
   }
   .mini .n.now.keystone {
-    fill: var(--red);
+    fill: var(--bad);
   }
   .mini .n.now.mastery,
   .mini .n.now.jewel {
@@ -717,45 +806,8 @@
   }
   .mini .ring {
     fill: none;
-    stroke: var(--strong);
+    stroke: var(--ink);
     stroke-width: 7;
-  }
-  .counts,
-  .stages {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .counts span {
-    padding: 1px 8px;
-    border-radius: 6px;
-    background: rgb(var(--bg-2));
-  }
-  .counts .notable {
-    color: var(--yellow);
-  }
-  .counts .keystone {
-    color: var(--red);
-  }
-  .stages span {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-weight: 500;
-    color: var(--muted);
-  }
-  .stages .cur {
-    background: var(--hover);
-    color: var(--strong);
-  }
-  .slot {
-    min-width: 92px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--muted);
   }
   .notes-body {
     max-height: 260px;
@@ -764,7 +816,40 @@
     font-size: 12px;
     line-height: 1.4;
     white-space: pre-wrap;
-    color: var(--text);
+    color: var(--ink);
+  }
+
+  /* settings: bottom right, above the game's mana orb */
+  .settings {
+    position: absolute;
+    right: 18px;
+    bottom: 19vh;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 300px;
+    max-height: calc(81vh - 18px);
+    overflow-y: auto;
+  }
+  .settings .card {
+    padding: 12px;
+    border-radius: 8px;
+  }
+  .editbox input:not([type]) {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: rgb(var(--surface-2));
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    user-select: text;
+  }
+  .editbox input:focus {
+    outline: 1px solid var(--accent);
   }
   summary {
     margin-top: 10px;
@@ -781,105 +866,7 @@
   }
   .langs button.on {
     background: var(--accent);
-  }
-  button.key {
-    padding: 2px 8px;
-    font-size: 12px;
-  }
-  .step {
-    animation: tick 0.45s ease-out;
-  }
-  .where {
-    font-size: 12px;
-    color: var(--muted);
-    font-variant-numeric: tabular-nums;
-  }
-  .grp {
-    margin-top: 8px;
-    font-size: 13px;
-    line-height: 1.35;
-    color: var(--strong);
-  }
-  .grp .support {
-    color: var(--muted);
-  }
-  .grp .new {
-    color: var(--accent);
-    font-weight: 600;
-  }
-  @keyframes tick {
-    0% {
-      opacity: 0;
-      transform: translateX(-8px);
-      color: var(--green);
-    }
-    100% {
-      opacity: 1;
-      transform: none;
-    }
-  }
-  .toasts {
-    position: absolute;
-    top: 52px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: grid;
-    gap: 6px;
-    justify-items: center;
-  }
-  .toast {
-    padding: 6px 14px;
-    border-radius: 10px;
-    background: var(--accent);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    font-size: 13px;
-    font-weight: 600;
-    color: #0b1a1d;
-    animation: in 0.16s ease-out;
-  }
-  button.copy {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-    padding: 0;
-    background: none;
-    text-align: left;
-  }
-  button.copy:hover:not(:disabled) {
-    background: var(--hover);
-  }
-  .list li.copied {
-    background: var(--green);
-  }
-  .hint,
-  .foot {
-    margin-top: 8px;
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .foot {
-    margin-top: 0;
-    text-align: right;
-  }
-  .warn {
-    color: var(--yellow);
-  }
-  .editbox input:not([type]) {
-    width: 100%;
-    box-sizing: border-box;
-    margin-top: 8px;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 4px;
-    background: rgb(var(--bg-0));
-    color: var(--text);
-    font: inherit;
-    font-size: 13px;
-    user-select: text;
-  }
-  .editbox input:focus {
-    outline: 2px solid var(--accent);
+    color: #10231a;
   }
   .slider {
     display: flex;
@@ -893,8 +880,8 @@
     padding: 4px 6px;
     border: 0;
     border-radius: 6px;
-    background: rgb(var(--bg-0));
-    color: var(--text);
+    background: rgb(var(--surface-2));
+    color: var(--ink);
     font: inherit;
     font-size: 13px;
   }
@@ -913,37 +900,51 @@
     padding: 6px 12px;
     border: 0;
     border-radius: 6px;
-    background: #3a4f58;
-    color: #fff;
+    background: rgb(var(--surface-2));
+    color: var(--ink);
     font: inherit;
     font-size: 13px;
-    font-weight: 500;
     cursor: pointer;
     transition: background 0.1s;
   }
   button:hover:not(:disabled) {
-    background: #5d7a84;
+    background: var(--hover);
   }
   .row button:first-child {
     background: var(--accent);
+    color: #10231a;
   }
   .row button:first-child:hover:not(:disabled) {
-    background: #52b5a3;
+    background: #a3d6b8;
   }
   .row button.plain {
-    background: #3a4f58;
+    background: rgb(var(--surface-2));
+    color: var(--ink);
   }
   .row button.plain:hover:not(:disabled) {
-    background: #5d7a84;
+    background: var(--hover);
+  }
+  button.key {
+    padding: 2px 8px;
+    font-size: 12px;
   }
   button:disabled {
     opacity: 0.5;
     cursor: default;
   }
+  button:focus-visible {
+    outline: 1px solid var(--accent);
+  }
+
   @keyframes in {
     from {
       opacity: 0;
-      transform: translateY(-4px);
+    }
+  }
+  @keyframes tick {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
     }
   }
   @media (prefers-reduced-motion: reduce) {
