@@ -38,6 +38,8 @@ struct Session {
     league_start: bool,
     /// "build" (follow the imported build, kill all without one), "kill", "alira", "oak" or "kraityn"
     bandit: String,
+    /// user correction on the point budget (the setting `points_adjust`)
+    points_adjust: i32,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -64,6 +66,8 @@ pub struct RouteView {
     pub rewards: Vec<rewards::Offer>,
     /// passive points this step gives (quest hand-ins)
     pub passive_points: u32,
+    /// vendor recipes found in this act's zones, lowest zone level first
+    pub recipes: Vec<String>,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -248,7 +252,9 @@ impl Session {
     fn views(&self, level: u32) -> Views {
         let e = self.engine();
         let wanted = self.wanted_gems(level);
-        let budget = (level > 0).then(|| points::level_points(level) + points::earned(e.done(), &self.flags));
+        let budget = (level > 0).then(|| {
+            (points::level_points(level) + points::earned(e.done(), &self.flags)).saturating_add_signed(self.points_adjust)
+        });
         let class = self.plan.as_ref().map(|p| p.class.as_str()).unwrap_or("");
         let route = e.current().map(|s| RouteView {
             rewards: {
@@ -264,6 +270,17 @@ impl Session {
                 rewards::offers(&ids, class, &wanted)
             },
             passive_points: points::at_step(s, &self.flags),
+            recipes: {
+                let mut zones: Vec<_> = ROUTE.areas.values().filter(|a| a.act == s.act && !a.crafting_recipes.is_empty()).collect();
+                zones.sort_by_key(|a| (a.level, &a.id));
+                let mut out: Vec<String> = Vec::new();
+                for r in zones.iter().flat_map(|a| &a.crafting_recipes) {
+                    if !out.contains(r) {
+                        out.push(r.clone());
+                    }
+                }
+                out
+            },
             act: s.act,
             index: e.progress.cursor,
             act_step: e.act_progress().0,
@@ -349,6 +366,7 @@ pub fn init(cfg: PathBuf) {
     let settings = crate::layout::load(&cfg).settings;
     s.league_start = settings.quests == "all";
     s.bandit = settings.bandit;
+    s.points_adjust = settings.points_adjust;
     // no build yet (or none at all): the route still needs its flags, or the bandit steps of acts 2 and 10 vanish
     s.flags = s.effective_flags();
     s.cfg = cfg;
@@ -363,6 +381,10 @@ pub fn set_all_quests(on: bool) {
     s.league_start = on;
     s.reflag();
     s.save_progress();
+}
+
+pub fn set_points_adjust(n: i32) {
+    SESSION.lock().unwrap().points_adjust = n.clamp(-crate::layout::ADJUST_MAX, crate::layout::ADJUST_MAX);
 }
 
 /// The bandit to side with in act 2; an unknown choice is ignored.
@@ -543,6 +565,25 @@ mod tests {
         // later stages first need the earlier stages paid for
         let later = s.views(60).plan.unwrap();
         assert!(later.spent_before > 0);
+    }
+
+    #[test]
+    fn the_points_correction_moves_the_budget_but_never_below_zero() {
+        let t = tempfile::tempdir().unwrap();
+        let mut s = session_with_plan(t.path());
+        s.points_adjust = 2;
+        assert_eq!(s.views(5).plan.unwrap().budget, Some(6));
+        s.points_adjust = -10;
+        assert_eq!(s.views(5).plan.unwrap().budget, Some(0));
+        assert_eq!(s.views(0).plan.unwrap().budget, None);
+    }
+
+    #[test]
+    fn town_views_list_the_recipes_of_the_act_once() {
+        let t = tempfile::tempdir().unwrap();
+        let s = session_with_plan(t.path());
+        let r = s.views(5).route.unwrap().recipes;
+        assert!(r.iter().enumerate().all(|(i, x)| !r[..i].contains(x)));
     }
 
     #[test]

@@ -15,6 +15,8 @@ pub struct WidgetPos {
     pub scale: f32,
 }
 
+pub const ADJUST_MAX: i32 = 10;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Settings {
@@ -29,11 +31,13 @@ pub struct Settings {
     pub quests: String,
     /// "build" = the imported build's choice (kill all without one), "kill", "alira", "oak" or "kraityn"
     pub bandit: String,
+    /// correction on the estimated passive points to spend, for when the estimate is off
+    pub points_adjust: i32,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false, quests: "essential".into(), bandit: "build".into() }
+        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false, quests: "essential".into(), bandit: "build".into(), points_adjust: 0 }
     }
 }
 
@@ -62,6 +66,7 @@ impl Layout {
         if !["build", "kill", "alira", "oak", "kraityn"].contains(&self.settings.bandit.as_str()) {
             self.settings.bandit = "build".into();
         }
+        self.settings.points_adjust = self.settings.points_adjust.clamp(-ADJUST_MAX, ADJUST_MAX);
         if !["en", "nl"].contains(&self.settings.lang.as_str()) {
             self.settings.lang = "en".into();
         }

@@ -17,6 +17,7 @@ export type Snapshot = {
       next: string[];
       rewards: { gem: string; how: "Take" | "Buy"; npc: string }[];
       passive_points: number;
+      recipes: string[];
     } | null;
     plan: {
       stage: number;

@@ -98,7 +98,7 @@ Commands assumed: `cargo test`, `npm run build`, `npm run tauri dev`.
 - [x] **Client.txt picker** — paste a path in edit mode when the log is not found; the watcher picks it up within 5 s.
 - [x] **Progress per act** — "Act 1 · 3 / 40" instead of the whole route.
 - [x] **Remove build** — a button in edit mode returns to the plain campaign route (deletes the saved build, bandit falls back to kill all, the route position stays).
-- [ ] **Still open from this round** — vendor recipes and the bandit choice in the town chip; "points spent" correction; a browse button for Client.txt.
+- [x] **Open items from this round** (done 2026-11-13, 89 tests + svelte-check clean, NOT seen live) — vendor recipes of the current act and the bandit choice in the route card while in town (the choice is a dropdown only in edit mode, since clicks pass through otherwise); a ± points correction in the Route settings; a Browse button for Client.txt (tauri-plugin-dialog; check the dialog is not hidden behind the overlay).
 
 ## Parallelizable
 After T2: T5-T8 (log) and T9-T12 (PoB) are independent. T19 (route data) can run alongside Phase 6. T22-T26 widgets are independent once T20 exists.

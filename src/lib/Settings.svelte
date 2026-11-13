@@ -1,9 +1,10 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { getVersion } from "@tauri-apps/api/app";
+  import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { t, type Key } from "./i18n.svelte";
-  import { layout, resetLayout, saveSoon } from "./layout.svelte";
+  import { BANDITS, layout, resetLayout, saveSoon, setBandit } from "./layout.svelte";
   import { hk, keyOf, pretty, comboOf, setBind, resetBinds } from "./hotkeys.svelte";
   import type { Snapshot } from "./types";
 
@@ -28,6 +29,13 @@
   // ---- setup: game log and build ----
   let logPath = $state("");
   let logMsg = $state("");
+  async function browseLog() {
+    const f = await open({ filters: [{ name: "Client.txt", extensions: ["txt"] }] }).catch(() => null);
+    if (typeof f === "string") {
+      logPath = f;
+      await pickLog();
+    }
+  }
   async function pickLog() {
     try {
       await invoke("set_log_path", { path: logPath });
@@ -63,12 +71,12 @@
     saveSoon();
     void invoke("quest_mode", { allQuests: q === "all" });
   };
-  const setBandit = (e: Event) => {
-    layout.settings.bandit = (e.currentTarget as HTMLSelectElement).value as typeof layout.settings.bandit;
+  // the Rust side clamps to ±10 as well
+  const setAdjust = (d: number) => {
+    layout.settings.points_adjust = Math.max(-10, Math.min(10, layout.settings.points_adjust + d));
     saveSoon();
-    void invoke("bandit_choice", { choice: layout.settings.bandit });
+    void invoke("points_adjust", { n: layout.settings.points_adjust });
   };
-  const BANDITS = ["build", "kill", "alira", "oak", "kraityn"] as const;
 
   // ---- display ----
   const setDensity = (d: string) => {
@@ -141,6 +149,7 @@
         {#if logMissing}
           <div class="row stack">
             <input bind:value={logPath} placeholder={t("logPickPlaceholder")} onkeydown={(e) => e.key === "Enter" && pickLog()} aria-label={t("logPickTitle")} />
+            <button onclick={browseLog}>{t("logBrowse")}</button>
             <button class="primary" onclick={pickLog} disabled={!logPath.trim()}>{t("logPickBtn")}</button>
           </div>
           {#if logMsg}<p class="msg">{logMsg}</p>{/if}
@@ -174,9 +183,17 @@
         </div>
         <div class="row">
           <div class="l"><span>{t("banditTitle")}</span><small>{t("banditHint")}</small></div>
-          <select value={layout.settings.bandit} onchange={setBandit} aria-label={t("banditTitle")}>
+          <select value={layout.settings.bandit} onchange={(e) => setBandit(e.currentTarget.value as typeof layout.settings.bandit)} aria-label={t("banditTitle")}>
             {#each BANDITS as b}<option value={b}>{t(`bandit${b[0].toUpperCase()}${b.slice(1)}` as Key)}</option>{/each}
           </select>
+        </div>
+        <div class="row">
+          <div class="l"><span>{t("adjustTitle")}</span><small>{t("adjustHint")}</small></div>
+          <div class="pair">
+            <button class="ghost" aria-label="−" onclick={() => setAdjust(-1)}>−</button>
+            <span>{layout.settings.points_adjust > 0 ? "+" : ""}{layout.settings.points_adjust}</span>
+            <button class="ghost" aria-label="+" onclick={() => setAdjust(1)}>+</button>
+          </div>
         </div>
       </div>
 

@@ -165,6 +165,9 @@ pub struct Area {
     pub level: u32,
     pub has_waypoint: bool,
     pub is_town_area: bool,
+    /// vendor recipes that drop or can be found in this zone
+    #[serde(default)]
+    pub crafting_recipes: Vec<String>,
 }
 
 pub struct Route {

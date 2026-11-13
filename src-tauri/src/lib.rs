@@ -121,6 +121,12 @@ fn bandit_choice(app: tauri::AppHandle, choice: String) {
 }
 
 #[tauri::command]
+fn points_adjust(app: tauri::AppHandle, n: i32) {
+    session::set_points_adjust(n);
+    watcher::refresh(&app);
+}
+
+#[tauri::command]
 fn set_log_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let p = locator::validate(&path)?;
     // the watcher looks for a saved path every few seconds while the log is missing
@@ -222,6 +228,7 @@ fn spawn_tracker(w: WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, sc, ev| {
@@ -297,7 +304,7 @@ pub fn run() {
             watcher::spawn(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, is_edit, exit_edit, hotkeys_reset, quest_mode, remove_build, set_log_path, bandit_choice, hotkeys_get, hotkeys_set, layout_load, layout_save])
+        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, is_edit, exit_edit, hotkeys_reset, quest_mode, remove_build, set_log_path, bandit_choice, points_adjust, hotkeys_get, hotkeys_set, layout_load, layout_save])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

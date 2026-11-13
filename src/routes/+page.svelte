@@ -4,9 +4,9 @@
   import { onMount } from "svelte";
   import Widget from "$lib/Widget.svelte";
   import Settings from "$lib/Settings.svelte";
-  import { i18n, t } from "$lib/i18n.svelte";
+  import { i18n, t, type Key } from "$lib/i18n.svelte";
   import { keyOf, loadBinds } from "$lib/hotkeys.svelte";
-  import { layout, loadLayout, saveSoon, sizeKey } from "$lib/layout.svelte";
+  import { BANDITS, layout, loadLayout, saveSoon, setBandit, sizeKey } from "$lib/layout.svelte";
   import type { Kind, Snapshot } from "$lib/types";
 
   const GLYPH: Record<Kind, string> = { Normal: "·", Notable: "◆", Keystone: "★", Mastery: "◇", Jewel: "●", Root: "·" };
@@ -141,6 +141,22 @@
           <p class="reward"><b>{r.gem}</b><span>{r.how === "Take" ? t("take") : t("buy")} · {r.npc}</span></p>
         {/each}
         {#each route.next.slice(0, 1) as n}<p class="next">{n}</p>{/each}
+        {#if snap?.state.town}
+          {#if route.recipes.length}<p class="next">{t("recipes", { list: route.recipes.join(" · ") })}</p>{/if}
+          {#if route.act === 2}
+            <p class="next bandit">
+              <span>{t("banditTitle")}</span>
+              <!-- clicks pass through the overlay outside edit mode, so it is a choice only there -->
+              {#if edit}
+                <select value={layout.settings.bandit} onchange={(e) => setBandit(e.currentTarget.value as typeof layout.settings.bandit)} aria-label={t("banditTitle")}>
+                  {#each BANDITS as b}<option value={b}>{t(`bandit${b[0].toUpperCase()}${b.slice(1)}` as Key)}</option>{/each}
+                </select>
+              {:else}
+                <b>{t(`bandit${layout.settings.bandit[0].toUpperCase()}${layout.settings.bandit.slice(1)}` as Key)}</b>
+              {/if}
+            </p>
+          {/if}
+        {/if}
       </section>
       </Widget>
     {/if}
@@ -399,6 +415,11 @@
     margin-top: 4px;
     font-size: 13px;
     color: var(--ink-2);
+  }
+  .bandit {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
   }
 
   /* lists: passives, gear */
