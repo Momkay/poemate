@@ -79,6 +79,9 @@
       .map((g) => [...g.filter((x) => !x.support), ...g.filter((x) => x.support)])
       .filter((g) => g.length),
   );
+  // gems and gear are shopping lists: out in a zone they are clutter
+  const shop = $derived((snap?.state.town ?? false) || panel || edit);
+  const COMPACT = 5;
   const changedGear =$derived(plan?.gear.filter((g) => g.changed) ?? []);
 
   // level-up toasts: max 2 at once, 6 s each; the first level seen after start is not a level-up
@@ -198,8 +201,9 @@
     {#if route}
       <Widget id="route" {edit}>
       <section class="card">
-        <header><span class="eyebrow">{t("act", { n: route.act })}</span><span class="badge">{route.index + 1} / {route.total}</span></header>
+        <header><span class="eyebrow">{t("act", { n: route.act })}</span><span class="meta">{route.index + 1} / {route.total}</span></header>
         <div class="bar"><i style:width="{((route.index + 1) / route.total) * 100}%"></i></div>
+        <div class="path">
         {#key route.index}<h1 class="step">{route.step}</h1>{/key}
         {#if snap?.state.town && route.rewards.length}
           <span class="chip town">{t("townTasks", { n: route.rewards.length })}</span>
@@ -211,11 +215,12 @@
         {/if}
         {#each route.rewards as r}
           <p class="reward">
-            <span class="av {r.how === 'Take' ? 'take' : 'buy'}">{r.gem[0]}</span>
+            <span class="mark {r.how === 'Take' ? 'take' : 'buy'}" aria-hidden="true">{r.how === "Take" ? "◆" : "◇"}</span>
             <span class="rtxt"><b>{r.gem}</b><span>{r.how === "Take" ? t("take") : t("buy")} · {r.npc}</span></span>
           </p>
         {/each}
-        {#each route.next as n, i}<p class="next" style:opacity={1 - i * 0.25}>{n}</p>{/each}
+        {#each route.next as n, i}<p class="next hop" style:opacity={1 - i * 0.25}>{n}</p>{/each}
+        </div>
       </section>
       </Widget>
     {/if}
@@ -225,7 +230,7 @@
       <section class="card" class:panel>
         <header>
           <span class="eyebrow">{plan.stage_title}{plan.manual ? ` · ${t("manual")}` : ""}</span>
-          <span class="badge">{t("nowBadge", { a: plan.passives_available, b: plan.passives_total })}</span>
+          <span class="meta">{t("nowBadge", { a: plan.passives_available, b: plan.passives_total })}</span>
         </header>
         {#if panel}
           <p class="counts">
@@ -253,7 +258,7 @@
           <p class="next">{t("noPassives")}</p>
         {/if}
         <ol class="list">
-          {#each panel ? plan.passives : plan.passives.slice(0, 8) as p}
+          {#each panel ? plan.passives : plan.passives.slice(0, COMPACT) as p}
             <li class={p.kind.toLowerCase()} class:locked={!p.available}>
               <span class="glyph">{GLYPH[p.kind]}</span>
               <span class="name">{p.name}</span>
@@ -261,7 +266,7 @@
             </li>
           {/each}
         </ol>
-        {#if !panel && plan.passives_total > 8}<p class="next">{t("moreHint", { n: plan.passives_total - 8, key: keyOf("panel") })}</p>{/if}
+        {#if !panel && plan.passives_total > COMPACT}<p class="next">{t("moreHint", { n: plan.passives_total - COMPACT, key: keyOf("panel") })}</p>{/if}
         {#each plan.masteries as [name, stats]}
           <p class="mastery">◇ {name}: {stats.join(" · ")}</p>
         {/each}
@@ -269,12 +274,12 @@
       </section>
       </Widget>
 
-      {#if links.length}
+      {#if links.length && shop}
         <Widget id="gems" {edit}>
         <section class="card">
           <header>
             <span class="eyebrow">{t("gems")}</span>
-            {#if plan.new_gems.length}<span class="badge">{t("newGems", { n: plan.new_gems.length })}</span>{/if}
+            {#if plan.new_gems.length}<span class="meta gain">{t("newGems", { n: plan.new_gems.length })}</span>{/if}
           </header>
           {#each links.slice(0, panel ? 12 : 5) as grp}
             <div class="chips">
@@ -288,7 +293,7 @@
         </Widget>
       {/if}
 
-      {#if changedGear.length}
+      {#if changedGear.length && shop}
         <Widget id="gear" {edit}>
         <section class="card">
           <header><span class="eyebrow">{t("gear")}</span></header>
@@ -389,25 +394,26 @@
 </main>
 
 <style>
-  /* Discord-overlay look: solid flat surfaces stepped by tone, one blurple accent, round avatars, no blur */
+  /* Waymarker look: warm ink surfaces stepped by tone, one ember accent that only marks "where you are now",
+     square-cut shapes and diamond waymarks borrowed from the passive tree; no blur, no pills, no avatars */
   :global(:root) {
-    --bg-0: 17, 18, 20;
-    --bg-1: 30, 31, 34;
-    --bg-2: 43, 45, 49;
-    --hover: #35373c;
-    --text: #dbdee1;
-    --strong: #f2f3f5;
-    --muted: #949ba4;
-    --blurple: #5865f2;
-    --green: #23a55a;
-    --yellow: #f0b232;
-    --red: #f23f43;
+    --bg-0: 14, 12, 10;
+    --bg-1: 25, 22, 19;
+    --bg-2: 40, 35, 30;
+    --hover: #3a342d;
+    --text: #d9d2c5;
+    --strong: #f4efe4;
+    --muted: #9a9082;
+    --accent: #e2813b;
+    --green: #5fae8f;
+    --yellow: #d9a93c;
+    --red: #d65a3a;
   }
   :global(html, body) {
     margin: 0;
     background: transparent;
     overflow: hidden;
-    font-family: "gg sans", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     font-size: 14px;
     color: var(--text);
     user-select: none;
@@ -444,7 +450,8 @@
     align-items: center;
     gap: 8px;
     padding: 4px 12px 4px 4px;
-    border-radius: 999px;
+    border-radius: 4px;
+    border-bottom: 2px solid var(--accent);
     font-size: 13px;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
@@ -457,11 +464,10 @@
     height: 24px;
     padding: 0 4px;
     box-sizing: border-box;
-    border-radius: 999px;
-    background: var(--blurple);
-    font-size: 12px;
+    font-family: Bahnschrift, "Segoe UI Variable Display", sans-serif;
+    font-size: 17px;
     font-weight: 700;
-    color: #fff;
+    color: var(--accent);
   }
   .alvl {
     color: var(--muted);
@@ -476,7 +482,7 @@
   }
   .card {
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 4px;
     animation: in 0.16s ease-out;
   }
   .compact .card {
@@ -495,23 +501,19 @@
     gap: 8px;
   }
   .eyebrow {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    font-family: Bahnschrift, "Segoe UI Variable Display", sans-serif;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--muted);
   }
-  .badge {
-    min-width: 18px;
-    padding: 0 7px;
-    border-radius: 999px;
-    background: var(--blurple);
+  .meta {
     font-size: 12px;
-    font-weight: 700;
-    line-height: 18px;
-    text-align: center;
-    color: #fff;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
     white-space: nowrap;
+  }
+  .meta.gain {
+    color: var(--green);
   }
   .bar {
     height: 4px;
@@ -524,7 +526,7 @@
     display: block;
     height: 100%;
     border-radius: 2px;
-    background: var(--blurple);
+    background: var(--accent);
     transition: width 0.25s ease-out;
   }
   h1 {
@@ -563,25 +565,60 @@
     gap: 8px;
     margin-top: 6px;
     padding: 4px 6px 4px 4px;
-    border-radius: 6px;
+    border-radius: 3px;
     background: rgb(var(--bg-2));
   }
-  .av {
-    display: grid;
-    place-items: center;
+  .mark {
     flex: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    font-size: 13px;
-    font-weight: 700;
-    color: #fff;
+    width: 20px;
+    text-align: center;
+    font-size: 15px;
   }
-  .av.take {
-    background: var(--green);
+  .mark.take {
+    color: var(--green);
   }
-  .av.buy {
-    background: var(--blurple);
+  .mark.buy {
+    color: var(--muted);
+  }
+  /* the route as a path: the current step is a waymark, what follows hangs below it on the same line */
+  .path {
+    position: relative;
+    margin-top: 10px;
+    padding-left: 20px;
+  }
+  .path::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 14px;
+    bottom: 6px;
+    width: 2px;
+    background: rgb(var(--bg-2));
+  }
+  .path h1 {
+    margin-top: 0;
+  }
+  .path h1::before,
+  .hop::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    transform: rotate(45deg) scale(0.75);
+  }
+  .path h1::before {
+    top: 5px;
+    background: var(--accent);
+  }
+  .hop {
+    position: relative;
+  }
+  .hop::before {
+    top: 3px;
+    border: 2px solid var(--muted);
+    box-sizing: border-box;
+    background: rgb(var(--bg-1));
   }
   .rtxt {
     display: grid;
@@ -623,7 +660,7 @@
     flex: none;
     width: 20px;
     height: 20px;
-    border-radius: 50%;
+    border-radius: 3px;
     background: rgb(var(--bg-2));
     font-size: 11px;
     color: var(--muted);
@@ -638,7 +675,7 @@
   }
   .mastery .glyph,
   .jewel .glyph {
-    background: var(--blurple);
+    background: var(--accent);
     color: #fff;
   }
   .name {
@@ -655,7 +692,7 @@
   p.mastery {
     margin-top: 8px;
     font-size: 12px;
-    color: #a5aff9;
+    color: var(--green);
   }
   .card.panel {
     width: 560px;
@@ -698,7 +735,7 @@
   }
   .mini .n.now.mastery,
   .mini .n.now.jewel {
-    fill: var(--blurple);
+    fill: var(--accent);
   }
   .mini .ring {
     fill: none;
@@ -716,7 +753,7 @@
   }
   .counts span {
     padding: 1px 8px;
-    border-radius: 999px;
+    border-radius: 3px;
     background: rgb(var(--bg-2));
   }
   .counts .notable {
@@ -750,7 +787,7 @@
   }
   .chip {
     padding: 2px 10px;
-    border-radius: 999px;
+    border-radius: 3px;
     background: rgb(var(--bg-2));
     font-size: 12px;
     font-weight: 500;
@@ -779,7 +816,7 @@
     margin-right: auto;
   }
   .langs button.on {
-    background: var(--blurple);
+    background: var(--accent);
   }
   button.key {
     padding: 2px 8px;
@@ -817,12 +854,12 @@
   }
   .toast {
     padding: 6px 14px;
-    border-radius: 999px;
-    background: var(--blurple);
+    border-radius: 4px;
+    background: var(--accent);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     font-size: 13px;
     font-weight: 600;
-    color: #fff;
+    color: #1a1612;
     animation: in 0.16s ease-out;
   }
   button.copy {
@@ -877,7 +914,7 @@
     user-select: text;
   }
   .editbox input:focus {
-    outline: 2px solid var(--blurple);
+    outline: 2px solid var(--accent);
   }
   .slider {
     display: flex;
@@ -891,7 +928,7 @@
     width: 140px;
     margin: 0;
     padding: 0;
-    accent-color: var(--blurple);
+    accent-color: var(--accent);
   }
   .row {
     display: flex;
@@ -914,10 +951,10 @@
     background: #6d6f78;
   }
   .row button:first-child {
-    background: var(--blurple);
+    background: var(--accent);
   }
   .row button:first-child:hover:not(:disabled) {
-    background: #4752c4;
+    background: #c4682a;
   }
   button:disabled {
     opacity: 0.5;
