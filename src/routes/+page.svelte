@@ -14,7 +14,8 @@
       route: {
         act: number;
         index: number;
-        total: number;
+        act_step: number;
+        act_total: number;
         step: string;
         label: string;
         hints: string[];
@@ -226,7 +227,7 @@
     {#if route}
       <Widget id="route" {edit}>
       <section class="card">
-        <p class="where">{t("act", { n: route.act })} · {route.index + 1} / {route.total}</p>
+        <p class="where">{t("act", { n: route.act })} · {route.act_step} / {route.act_total}</p>
         {#key route.index}<h1 class="step">{route.step}</h1>{/key}
         {#if route.label}<p class="label">{route.label}</p>{/if}
         {#each route.hints.slice(0, 1) as h}<p class="label">{h}</p>{/each}

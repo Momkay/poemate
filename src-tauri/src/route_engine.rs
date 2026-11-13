@@ -35,8 +35,16 @@ impl<'a> Engine<'a> {
         Self { route, steps, progress: Progress { cursor } }
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.steps.len()
+    }
+
+    /// (step number, number of steps) within the act of the current step; the whole route is too long to mean anything.
+    pub fn act_progress(&self) -> (usize, usize) {
+        let Some(cur) = self.current() else { return (0, 0) };
+        let first = self.steps.iter().position(|s| s.act == cur.act).unwrap_or(0);
+        (self.progress.cursor - first + 1, self.steps.iter().filter(|s| s.act == cur.act).count())
     }
 
     pub fn current(&self) -> Option<&'a Step> {
@@ -226,6 +234,19 @@ mod tests {
         for c in 0..steps_full.len() {
             let to = convert_cursor(&r, c, &full, &lean);
             assert!(steps_lean[to].act >= steps_full[c].act, "full step {c} went back an act");
+        }
+    }
+
+    #[test]
+    fn progress_counts_inside_the_act() {
+        let r = route();
+        let flags = flags_for("None", false);
+        let steps: Vec<_> = r.steps.iter().filter(|s| s.applies(&flags)).collect();
+        for act in 1..=10 {
+            let idx: Vec<usize> = steps.iter().enumerate().filter(|(_, s)| s.act == act).map(|(i, _)| i).collect();
+            let at = |c: usize| Engine::new(&r, &flags, Progress { cursor: c }).act_progress();
+            assert_eq!(at(idx[0]), (1, idx.len()), "first step of act {act}");
+            assert_eq!(at(*idx.last().unwrap()), (idx.len(), idx.len()), "last step of act {act}");
         }
     }
 }

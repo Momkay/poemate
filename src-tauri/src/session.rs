@@ -53,7 +53,9 @@ struct Saved {
 pub struct RouteView {
     pub act: u32,
     pub index: usize,
-    pub total: usize,
+    /// position inside the current act (1-based) and the number of steps of that act
+    pub act_step: usize,
+    pub act_total: usize,
     pub step: String,
     pub label: String,
     pub hints: Vec<String>,
@@ -254,7 +256,8 @@ impl Session {
             passive_points: points::at_step(s, &self.flags),
             act: s.act,
             index: e.progress.cursor,
-            total: e.len(),
+            act_step: e.act_progress().0,
+            act_total: e.act_progress().1,
             step: ROUTE.plain(&s.parts),
             label: s.label.clone(),
             hints: s.hints.iter().map(|h| ROUTE.plain(h)).collect(),
