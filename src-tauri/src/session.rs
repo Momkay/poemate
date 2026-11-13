@@ -21,7 +21,6 @@ pub static ROUTE: LazyLock<Route> = LazyLock::new(|| Route::load().expect("bundl
 static SESSION: LazyLock<Mutex<Session>> = LazyLock::new(|| Mutex::new(Session::default()));
 
 const BUILD_FILE: &str = "build.txt";
-const LEAGUE_FLAG: &str = "LEAGUE_START";
 const MAX_PASSIVES_SHOWN: usize = 40;
 const NOTES_MAX: usize = 3000;
 
@@ -37,15 +36,17 @@ struct Session {
     auto_stage: Option<Option<usize>>,
     character: Option<String>,
     league_start: bool,
+    /// "build" (follow the imported build, kill all without one), "kill", "alira", "oak" or "kraityn"
+    bandit: String,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 struct Saved {
     cursor: usize,
     stage_override: Option<usize>,
-    /// the route variant `cursor` counts in: the route with the extra side quests has other indexes
+    /// the route flags `cursor` counts in: bandit and side quests change which steps exist. None = an old file.
     #[serde(default)]
-    league_start: bool,
+    flags: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -130,6 +131,12 @@ pub struct Views {
     pub plan: Option<PlanView>,
 }
 
+fn sorted(flags: &HashSet<String>) -> Vec<String> {
+    let mut v: Vec<String> = flags.iter().cloned().collect();
+    v.sort();
+    v
+}
+
 fn safe_name(name: &str) -> String {
     name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect()
 }
@@ -142,7 +149,7 @@ impl Session {
     fn save_progress(&self) {
         let Some(c) = &self.character else { return };
         let path = self.progress_path(c);
-        let saved = Saved { cursor: self.cursor, stage_override: self.stage_override, league_start: self.league_start };
+        let saved = Saved { cursor: self.cursor, stage_override: self.stage_override, flags: Some(sorted(&self.flags)) };
         let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
         let tmp = path.with_extension("tmp");
         if serde_json::to_vec(&saved).ok().and_then(|b| std::fs::write(&tmp, b).ok()).is_some() {
@@ -154,14 +161,28 @@ impl Session {
         serde_json::from_slice(&std::fs::read(self.progress_path(character)).ok()?).ok()
     }
 
-    /// Takes a saved position, converting the cursor when it was saved in the other route variant.
+    /// The flags the route runs with: the bandit (setting, else the build's, else kill all) and the side-quest variant.
+    fn effective_flags(&self) -> HashSet<String> {
+        let bandit = match self.bandit.as_str() {
+            "kill" => "None",
+            "alira" => "Alira",
+            "oak" => "Oak",
+            "kraityn" => "Kraityn",
+            _ => self.plan.as_ref().map_or("None", |p| p.bandit.as_str()),
+        };
+        flags_for(bandit, self.league_start)
+    }
+
+    /// Call after the bandit, the side-quest variant or the build changed: new flags, and the cursor stays on its step.
+    fn reflag(&mut self) {
+        let new = self.effective_flags();
+        let from = std::mem::replace(&mut self.flags, new);
+        self.cursor = convert_cursor(&ROUTE, self.cursor, &from, &self.flags);
+    }
+
+    /// Takes a saved position, converting the cursor when it was saved under other route flags.
     fn adopt(&mut self, s: Saved) {
-        let mut from = self.flags.clone();
-        if s.league_start {
-            from.insert(LEAGUE_FLAG.into());
-        } else {
-            from.remove(LEAGUE_FLAG);
-        }
+        let from = s.flags.map_or_else(|| self.flags.clone(), |f| f.into_iter().collect());
         self.cursor = convert_cursor(&ROUTE, s.cursor, &from, &self.flags);
         self.stage_override = s.stage_override;
     }
@@ -312,9 +333,11 @@ impl Session {
 
 pub fn init(cfg: PathBuf) {
     let mut s = SESSION.lock().unwrap();
-    s.league_start = crate::layout::load(&cfg).settings.quests == "all";
+    let settings = crate::layout::load(&cfg).settings;
+    s.league_start = settings.quests == "all";
+    s.bandit = settings.bandit;
     // no build yet (or none at all): the route still needs its flags, or the bandit steps of acts 2 and 10 vanish
-    s.flags = flags_for("None", s.league_start);
+    s.flags = s.effective_flags();
     s.cfg = cfg;
 }
 
@@ -324,14 +347,19 @@ pub fn set_all_quests(on: bool) {
     if s.league_start == on {
         return;
     }
-    let from = s.flags.clone();
     s.league_start = on;
-    if on {
-        s.flags.insert(LEAGUE_FLAG.into());
-    } else {
-        s.flags.remove(LEAGUE_FLAG);
+    s.reflag();
+    s.save_progress();
+}
+
+/// The bandit to side with in act 2; an unknown choice is ignored.
+pub fn set_bandit(choice: &str) {
+    if !["build", "kill", "alira", "oak", "kraityn"].contains(&choice) {
+        return;
     }
-    s.cursor = convert_cursor(&ROUTE, s.cursor, &from, &s.flags);
+    let mut s = SESSION.lock().unwrap();
+    s.bandit = choice.to_string();
+    s.reflag();
     s.save_progress();
 }
 
@@ -365,11 +393,10 @@ pub fn sync_to_current_area(state: &State) {
     }
 }
 
-fn make_plan(text: &str, cfg: &Path, league_start: bool) -> Result<(Plan, HashSet<String>), String> {
+fn make_plan(text: &str, cfg: &Path) -> Result<Plan, String> {
     let xml = pob_source::from_text(text).map_err(|e| e.to_string())?;
     let build = pob_model::parse(&xml).map_err(|_| "That isn't a Path of Building export".to_string())?;
     let tree = tree::load(cfg, false, tree::download).map_err(|_| "Couldn't load the passive tree data (offline?)".to_string())?;
-    let flags = flags_for(&build.bandit, league_start);
     let mut plan = plan::build(&build, &tree);
     // ids above 65535 are cluster jewel nodes and never in the export; any other unknown id means an old cache
     let unknown = plan.stages.iter().flat_map(|s| &s.passives).any(|p| !p.known && p.id <= 65535);
@@ -378,7 +405,7 @@ fn make_plan(text: &str, cfg: &Path, league_start: bool) -> Result<(Plan, HashSe
             plan = plan::build(&build, &fresh);
         }
     }
-    Ok((plan, flags))
+    Ok(plan)
 }
 
 #[derive(Serialize)]
@@ -390,11 +417,11 @@ pub struct ImportSummary {
 }
 
 /// `keep_stage`: a restored build keeps the manual stage loaded for the character; a new import starts fresh.
-fn install(plan: Plan, flags: HashSet<String>, keep_stage: bool) -> ImportSummary {
+fn install(plan: Plan, keep_stage: bool) -> ImportSummary {
     let summary = ImportSummary { class: plan.class.clone(), ascendancy: plan.ascendancy.clone(), stages: plan.stages.len(), auto_order: plan.auto_order };
     let mut s = SESSION.lock().unwrap();
     s.plan = Some(plan);
-    s.flags = flags;
+    s.reflag(); // the build may bring its own bandit
     if !keep_stage {
         s.stage_override = None;
     }
@@ -404,27 +431,21 @@ fn install(plan: Plan, flags: HashSet<String>, keep_stage: bool) -> ImportSummar
 
 /// Blocking: may download the build and the tree data.
 pub fn import(input: &str) -> Result<ImportSummary, String> {
-    let (cfg, league_start) = {
-        let s = SESSION.lock().unwrap();
-        (s.cfg.clone(), s.league_start)
-    };
+    let cfg = SESSION.lock().unwrap().cfg.clone();
     let text = pob_source::resolve(input).map_err(|e| e.to_string())?;
-    let (plan, flags) = make_plan(&text, &cfg, league_start)?;
+    let plan = make_plan(&text, &cfg)?;
     let _ = std::fs::create_dir_all(&cfg);
     let _ = std::fs::write(cfg.join(BUILD_FILE), &text);
-    Ok(install(plan, flags, false))
+    Ok(install(plan, false))
 }
 
 /// Blocking: reload the build saved by the last import, if any.
 pub fn restore() {
-    let (cfg, league_start) = {
-        let s = SESSION.lock().unwrap();
-        (s.cfg.clone(), s.league_start)
-    };
+    let cfg = SESSION.lock().unwrap().cfg.clone();
     if let Ok(text) = std::fs::read_to_string(cfg.join(BUILD_FILE)) {
-        match make_plan(&text, &cfg, league_start) {
-            Ok((plan, flags)) => {
-                install(plan, flags, true);
+        match make_plan(&text, &cfg) {
+            Ok(plan) => {
+                install(plan, true);
             }
             Err(e) => eprintln!("restoring the saved build failed: {e}"),
         }
@@ -518,6 +539,41 @@ mod tests {
         s.on_event(&Event::LevelChanged { level: 33 }, 33);
         let v = s.views(33).plan.unwrap();
         assert_eq!((v.stage_title.as_str(), v.manual), ("2) Normal Lab", false)); // auto stage changed: override cleared
+    }
+
+    #[test]
+    fn the_bandit_setting_beats_the_build_and_the_cursor_stays_on_its_step() {
+        let t = tempfile::tempdir().unwrap();
+        let mut s = session_with_plan(t.path());
+        s.reflag();
+        assert!(s.flags.contains("BANDIT_ALIRA"), "follows the build by default");
+        let in_act3 = ROUTE.steps.iter().filter(|x| x.applies(&s.flags)).position(|x| x.act == 3).unwrap();
+        s.cursor = in_act3 + 5;
+        let before = s.engine().current().unwrap() as *const crate::route::Step;
+        s.bandit = "oak".into();
+        s.reflag();
+        assert!(s.flags.contains("BANDIT_OAK") && !s.flags.contains("BANDIT_ALIRA"));
+        assert!(std::ptr::eq(s.engine().current().unwrap(), before), "the cursor moved to another step");
+        s.bandit = "kill".into();
+        s.reflag();
+        assert!(s.flags.contains("BANDIT_KILL"));
+    }
+
+    #[test]
+    fn a_position_saved_under_one_bandit_is_read_correctly_under_another() {
+        let t = tempfile::tempdir().unwrap();
+        let mut one = session_with_plan(t.path());
+        one.reflag(); // alira
+        one.character = Some("Ranger".into());
+        one.cursor = ROUTE.steps.iter().filter(|x| x.applies(&one.flags)).position(|x| x.act == 4).unwrap() + 3;
+        let step = one.engine().current().unwrap() as *const crate::route::Step;
+        one.save_progress();
+
+        let mut two = session_with_plan(t.path());
+        two.bandit = "kill".into();
+        two.reflag();
+        two.on_event(&Event::CharacterDetected { name: "Ranger".into(), class: "Ranger".into() }, 30);
+        assert!(std::ptr::eq(two.engine().current().unwrap(), step));
     }
 
     #[test]

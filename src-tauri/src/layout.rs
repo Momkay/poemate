@@ -27,11 +27,13 @@ pub struct Settings {
     pub onboarded: bool,
     /// "essential" = the route for passive points and gems, "all" = plus every extra side quest and detour
     pub quests: String,
+    /// "build" = the imported build's choice (kill all without one), "kill", "alira", "oak" or "kraityn"
+    pub bandit: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false, quests: "essential".into() }
+        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false, quests: "essential".into(), bandit: "build".into() }
     }
 }
 
@@ -56,6 +58,9 @@ impl Layout {
         }
         if !["essential", "all"].contains(&self.settings.quests.as_str()) {
             self.settings.quests = "essential".into();
+        }
+        if !["build", "kill", "alira", "oak", "kraityn"].contains(&self.settings.bandit.as_str()) {
+            self.settings.bandit = "build".into();
         }
         if !["en", "nl"].contains(&self.settings.lang.as_str()) {
             self.settings.lang = "en".into();

@@ -136,6 +136,11 @@
     saveSoon();
     invoke("quest_mode", { allQuests: q === "all" });
   };
+  const setBandit = (e: Event) => {
+    layout.settings.bandit = (e.currentTarget as HTMLSelectElement).value as typeof layout.settings.bandit;
+    saveSoon();
+    invoke("bandit_choice", { choice: layout.settings.bandit });
+  };
   const finish = () => {
     layout.settings.onboarded = true;
     saveSoon();
@@ -371,6 +376,13 @@
           {/each}
         </p>
         <p class="hint">{t("questsHint")}</p>
+        <label class="slider">{t("banditTitle")}
+          <select value={layout.settings.bandit} onchange={setBandit}>
+            {#each ["build", "kill", "alira", "oak", "kraityn"] as b}
+              <option value={b}>{t(`bandit${b[0].toUpperCase()}${b.slice(1)}` as Key)}</option>
+            {/each}
+          </select>
+        </label>
         <p class="langs">
           <span class="eyebrow">{t("language")}</span>
           {#each ["en", "nl"] as const as l}<button class:on={layout.settings.lang === l} onclick={() => setLang(l)}>{l.toUpperCase()}</button>{/each}
@@ -843,6 +855,15 @@
     justify-content: space-between;
     gap: 10px;
     margin-top: 10px;
+    font-size: 13px;
+  }
+  .slider select {
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: rgb(var(--bg-0));
+    color: var(--text);
+    font: inherit;
     font-size: 13px;
   }
   .slider input {
