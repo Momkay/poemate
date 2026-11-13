@@ -2,7 +2,6 @@
 //! Parsing only: no network, no login. The fields follow https://www.pathofexile.com/developer/docs/reference
 //! (checked 2026-11-13); the test fixture is hand-written from that description, not a real response.
 
-#![allow(dead_code)] // shortcut: unused until the sync fetch (T35) and the diff (T36) call it, remove then
 
 use std::collections::HashSet;
 
@@ -10,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::plan::{Plan, Stage};
 use crate::pob_model::{Gem, GemGroup};
-use crate::tree::{Kind, Step, TreeData};
+use crate::tree::{Kind, TreeData};
 
 #[derive(Deserialize)]
 struct Envelope {
@@ -104,20 +103,27 @@ pub fn parse(json: &str) -> Result<Synced, serde_json::Error> {
     Ok(Synced { name, class, level, nodes, masteries, bandit: passives.bandit_choice, groups })
 }
 
+impl Synced {
+    /// Class and ascendancy starts come with the character for free: they are never a choice, so never "extra".
+    pub fn drop_free(&mut self, tree: &TreeData) {
+        self.nodes.retain(|n| tree.node(*n).is_none_or(|x| x.kind != Kind::Root));
+    }
+}
+
 /// Plan vs character at one stage. Passives are compared cumulatively (stages only list the points they add).
 #[derive(Debug, Default, PartialEq, Serialize)]
 pub struct Diff {
     /// planned up to this stage, not allocated yet
     pub missing: Vec<u32>,
-    /// allocated but not in the plan (class/ascendancy starts never count)
+    /// allocated but not in the plan
     pub extra: Vec<u32>,
     pub missing_gems: Vec<String>,
 }
 
-pub fn diff(plan: &Plan, stage: usize, tree: &TreeData, have: &Synced) -> Diff {
+pub fn diff(plan: &Plan, stage: usize, have: &Synced) -> Diff {
     let planned_nodes: Vec<u32> = plan.stages.iter().take(stage + 1).flat_map(|s| s.passives.iter().map(|p| p.id)).collect();
     let planned: HashSet<u32> = planned_nodes.iter().copied().collect();
-    let mut extra: Vec<u32> = have.nodes.iter().copied().filter(|n| !planned.contains(n) && tree.node(*n).is_none_or(|x| x.kind != Kind::Root)).collect();
+    let mut extra: Vec<u32> = have.nodes.iter().copied().filter(|n| !planned.contains(n)).collect();
     extra.sort_unstable();
     let owned: HashSet<&str> = have.groups.iter().flat_map(|g| g.gems.iter().map(|g| g.name.as_str())).collect();
     let mut missing_gems: Vec<String> = Vec::new();
@@ -132,6 +138,7 @@ pub fn diff(plan: &Plan, stage: usize, tree: &TreeData, have: &Synced) -> Diff {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tree::Step;
 
     fn step(id: u32) -> Step {
         Step { id, name: String::new(), kind: Kind::Normal, stats: vec![], ascendancy: None, known: false, pos: None, from: None }
@@ -162,11 +169,10 @@ mod tests {
             auto_order: false,
             stages: vec![stage(&[100, 200], &["Caustic Arrow"]), stage(&[300, 400], &["Caustic Arrow", "Herald of Agony", "Pride"])],
         };
-        let tree = TreeData::from_json(r#"{"nodes":{}}"#).unwrap();
         let have = parse(SAMPLE).unwrap(); // nodes 100, 200, 300; gems Caustic Arrow, Added Chaos, Herald of Agony
-        let d0 = diff(&plan, 0, &tree, &have);
+        let d0 = diff(&plan, 0, &have);
         assert_eq!((d0.missing, d0.extra, d0.missing_gems), (vec![], vec![300], vec![]));
-        let d1 = diff(&plan, 1, &tree, &have);
+        let d1 = diff(&plan, 1, &have);
         assert_eq!((d1.missing, d1.extra, d1.missing_gems), (vec![400], vec![], vec!["Pride".to_string()]));
     }
 
@@ -192,6 +198,14 @@ mod tests {
         assert_eq!(first.gems.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Caustic Arrow", "Added Chaos Damage Support"]);
         assert_eq!((first.gems[0].level, first.gems[0].quality, first.gems[1].support), (12, 5, true));
         assert_eq!(s.groups[1].gems[0].name, "Herald of Agony");
+    }
+
+    #[test]
+    fn free_start_nodes_are_dropped() {
+        let tree = TreeData::from_json(r#"{"nodes":{"1":{"skill":1,"classStartIndex":0},"100":{"skill":100}}}"#).unwrap();
+        let mut s = Synced { nodes: HashSet::from([1, 100, 999]), ..Default::default() };
+        s.drop_free(&tree);
+        assert_eq!(s.nodes, HashSet::from([100, 999]));
     }
 
     #[test]

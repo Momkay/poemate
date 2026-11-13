@@ -21,6 +21,8 @@ pub static ROUTE: LazyLock<Route> = LazyLock::new(|| Route::load().expect("bundl
 static SESSION: LazyLock<Mutex<Session>> = LazyLock::new(|| Mutex::new(Session::default()));
 
 const BUILD_FILE: &str = "build.txt";
+/// dev route until the OAuth sync exists (T34/T35): a saved `GET /character/<name>` response
+const CHARACTER_FILE: &str = "character.json";
 const MAX_PASSIVES_SHOWN: usize = 40;
 const NOTES_MAX: usize = 3000;
 
@@ -40,6 +42,8 @@ struct Session {
     bandit: String,
     /// user correction on the point budget (the setting `points_adjust`)
     points_adjust: i32,
+    /// the real character, when synced
+    synced: Option<crate::character_api::Synced>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -78,6 +82,21 @@ pub struct PassiveView {
     pub known: bool,
     /// the estimated point budget covers it (always true when the level is unknown)
     pub available: bool,
+    /// the synced character has this point
+    pub taken: bool,
+}
+
+/// Plan vs the synced character at this stage
+#[derive(Serialize, Clone, PartialEq, Debug)]
+pub struct SyncView {
+    pub name: String,
+    pub level: u32,
+    /// planned up to this stage but not allocated (names, capped)
+    pub missing: Vec<String>,
+    pub missing_total: usize,
+    /// allocated points that are not in the plan
+    pub extra: usize,
+    pub missing_gems: Vec<String>,
 }
 
 /// One node of the mini tree: where it sits, the allocated neighbour it hangs off, and when it is taken.
@@ -129,6 +148,7 @@ pub struct PlanView {
     pub gear: Vec<GearView>,
     /// the build's notes, capped: they travel with every snapshot
     pub notes: String,
+    pub sync: Option<SyncView>,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug, Default)]
@@ -334,7 +354,7 @@ impl Session {
                     .iter()
                     .zip(&available)
                     .take(MAX_PASSIVES_SHOWN)
-                    .map(|(x, a)| PassiveView { name: x.name.clone(), kind: x.kind, stats: x.stats.clone(), known: x.known, available: *a })
+                    .map(|(x, a)| PassiveView { name: x.name.clone(), kind: x.kind, stats: x.stats.clone(), known: x.known, available: *a, taken: self.synced.as_ref().is_some_and(|c| c.nodes.contains(&x.id)) })
                     .collect(),
                 masteries: s.masteries.clone(),
                 new_gems: s.new_gems.clone(),
@@ -355,6 +375,11 @@ impl Session {
                     })
                     .collect(),
                 notes: p.notes.chars().take(NOTES_MAX).collect(),
+                sync: self.synced.as_ref().map(|c| {
+                    let d = crate::character_api::diff(p, stage, c);
+                    let names = p.stages[..=stage].iter().flat_map(|st| &st.passives).filter(|x| d.missing.contains(&x.id)).map(|x| x.name.clone());
+                    SyncView { name: c.name.clone(), level: c.level, missing_total: d.missing.len(), missing: names.take(MAX_PASSIVES_SHOWN).collect(), extra: d.extra.len(), missing_gems: d.missing_gems }
+                }),
             })
         });
         Views { route, plan }
@@ -481,6 +506,7 @@ pub fn remove_build() {
 /// Blocking: reload the build saved by the last import, if any.
 pub fn restore() {
     let cfg = SESSION.lock().unwrap().cfg.clone();
+    load_character(&cfg);
     if let Ok(text) = std::fs::read_to_string(cfg.join(BUILD_FILE)) {
         match make_plan(&text, &cfg) {
             Ok(plan) => {
@@ -488,6 +514,20 @@ pub fn restore() {
             }
             Err(e) => eprintln!("restoring the saved build failed: {e}"),
         }
+    }
+}
+
+/// Reads `character.json` if present; a bad file is reported and ignored.
+fn load_character(cfg: &Path) {
+    let Ok(text) = std::fs::read_to_string(cfg.join(CHARACTER_FILE)) else { return };
+    match crate::character_api::parse(&text) {
+        Ok(mut c) => {
+            if let Ok(t) = tree::load(cfg, false, tree::download) {
+                c.drop_free(&t);
+            }
+            SESSION.lock().unwrap().synced = Some(c);
+        }
+        Err(e) => eprintln!("{CHARACTER_FILE} is not a character response: {e}"),
     }
 }
 
@@ -565,6 +605,20 @@ mod tests {
         // later stages first need the earlier stages paid for
         let later = s.views(60).plan.unwrap();
         assert!(later.spent_before > 0);
+    }
+
+    #[test]
+    fn a_synced_character_marks_taken_points_and_counts_the_rest() {
+        let t = tempfile::tempdir().unwrap();
+        let mut s = session_with_plan(t.path());
+        let first = s.views(5).plan.unwrap();
+        assert!(first.sync.is_none() && first.passives.iter().all(|p| !p.taken));
+        let id = s.plan.as_ref().unwrap().stages[first.stage].passives[0].id;
+        s.synced = Some(crate::character_api::Synced { name: "Zed".into(), level: 5, nodes: [id, 1].into(), ..Default::default() });
+        let v = s.views(5).plan.unwrap();
+        assert!(v.passives[0].taken && !v.passives[1].taken);
+        let sync = v.sync.unwrap();
+        assert_eq!((sync.extra, sync.missing_total), (1, v.passives_total - 1));
     }
 
     #[test]

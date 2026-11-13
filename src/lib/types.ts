@@ -33,12 +33,13 @@ export type Snapshot = {
       budget: number | null;
       spent_before: number;
       tree: { x: number; y: number; from: [number, number] | null; kind: Kind; state: "done" | "now" | "later" }[];
-      passives: { name: string; kind: Kind; stats: string[]; known: boolean; available: boolean }[];
+      passives: { name: string; kind: Kind; stats: string[]; known: boolean; available: boolean; taken: boolean }[];
       masteries: [string, string[]][];
       new_gems: string[];
       gems: { name: string; support: boolean }[][];
       gear: { slot: string; name: string; base: string; changed: boolean }[];
       notes: string;
+      sync: { name: string; level: number; missing: string[]; missing_total: number; extra: number; missing_gems: string[] } | null;
     } | null;
   };
 };

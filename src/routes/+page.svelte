@@ -190,12 +190,15 @@
         {#if plan.budget !== null && panel}
           <p class="next">{t("pointsToSpend", { n: Math.max(0, plan.budget - plan.spent_before) })}</p>
         {/if}
+        {#if plan.sync}
+          <p class="next">{t("syncLine", { name: plan.sync.name, lvl: plan.sync.level, n: plan.sync.missing_total, x: plan.sync.extra })}</p>
+        {/if}
         {#if plan.passives.length === 0}
           <p class="next">{t("noPassives")}</p>
         {/if}
         <ol class="list">
           {#each panel ? plan.passives : plan.passives.slice(0, COMPACT) as p}
-            <li class={p.kind.toLowerCase()} class:locked={!p.available}>
+            <li class={p.kind.toLowerCase()} class:locked={!p.available} class:taken={p.taken}>
               <span class="glyph">{GLYPH[p.kind]}</span>
               <span class="name">{p.name}</span>
               {#if panel && p.kind !== "Normal" && p.stats[0]}<span class="stat">{p.stats[0]}</span>{/if}
@@ -222,6 +225,7 @@
               {#each grp as g, i}<span class:support={g.support} class:new={plan.new_gems.includes(g.name)}>{g.name}</span>{i < grp.length - 1 ? " · " : ""}{/each}
             </p>
           {/each}
+          {#if plan.sync?.missing_gems.length}<p class="next">{t("syncGems", { list: plan.sync.missing_gems.join(", ") })}</p>{/if}
           {#if links.length > (panel ? 12 : 4)}<p class="next">{t("moreLinks", { n: links.length - (panel ? 12 : 4) })}</p>{/if}
         </section>
         </Widget>
@@ -462,6 +466,10 @@
     padding-left: 20px;
     font-size: 12px;
     color: var(--ink-2);
+  }
+  .taken {
+    opacity: 0.45;
+    text-decoration: line-through;
   }
   .locked {
     opacity: 0.5;
