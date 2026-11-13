@@ -8,7 +8,9 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
+use crate::plan::{Plan, Stage};
 use crate::pob_model::{Gem, GemGroup};
+use crate::tree::{Kind, Step, TreeData};
 
 #[derive(Deserialize)]
 struct Envelope {
@@ -102,9 +104,71 @@ pub fn parse(json: &str) -> Result<Synced, serde_json::Error> {
     Ok(Synced { name, class, level, nodes, masteries, bandit: passives.bandit_choice, groups })
 }
 
+/// Plan vs character at one stage. Passives are compared cumulatively (stages only list the points they add).
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct Diff {
+    /// planned up to this stage, not allocated yet
+    pub missing: Vec<u32>,
+    /// allocated but not in the plan (class/ascendancy starts never count)
+    pub extra: Vec<u32>,
+    pub missing_gems: Vec<String>,
+}
+
+pub fn diff(plan: &Plan, stage: usize, tree: &TreeData, have: &Synced) -> Diff {
+    let planned_nodes: Vec<u32> = plan.stages.iter().take(stage + 1).flat_map(|s| s.passives.iter().map(|p| p.id)).collect();
+    let planned: HashSet<u32> = planned_nodes.iter().copied().collect();
+    let mut extra: Vec<u32> = have.nodes.iter().copied().filter(|n| !planned.contains(n) && tree.node(*n).is_none_or(|x| x.kind != Kind::Root)).collect();
+    extra.sort_unstable();
+    let owned: HashSet<&str> = have.groups.iter().flat_map(|g| g.gems.iter().map(|g| g.name.as_str())).collect();
+    let mut missing_gems: Vec<String> = Vec::new();
+    for g in plan.stages.get(stage).iter().flat_map(|s| &s.gems).filter(|g| g.enabled).flat_map(|g| &g.gems).filter(|g| g.enabled) {
+        if !owned.contains(g.name.as_str()) && !missing_gems.contains(&g.name) {
+            missing_gems.push(g.name.clone());
+        }
+    }
+    Diff { missing: planned_nodes.into_iter().filter(|n| !have.nodes.contains(n)).collect(), extra, missing_gems }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn step(id: u32) -> Step {
+        Step { id, name: String::new(), kind: Kind::Normal, stats: vec![], ascendancy: None, known: false, pos: None, from: None }
+    }
+
+    fn stage(ids: &[u32], gems: &[&str]) -> Stage {
+        let gem = |n: &&str| Gem { name: n.to_string(), enabled: true, ..Default::default() };
+        Stage {
+            title: String::new(),
+            from_level: None,
+            passives: ids.iter().map(|i| step(*i)).collect(),
+            masteries: vec![],
+            gems: vec![GemGroup { slot: String::new(), enabled: true, gems: gems.iter().map(gem).collect() }],
+            new_gems: vec![],
+            gear: vec![],
+        }
+    }
+
+    #[test]
+    fn diff_is_cumulative_and_lists_missing_gems() {
+        let plan = Plan {
+            class: String::new(),
+            ascendancy: String::new(),
+            bandit: String::new(),
+            pantheon_major: String::new(),
+            pantheon_minor: String::new(),
+            notes: String::new(),
+            auto_order: false,
+            stages: vec![stage(&[100, 200], &["Caustic Arrow"]), stage(&[300, 400], &["Caustic Arrow", "Herald of Agony", "Pride"])],
+        };
+        let tree = TreeData::from_json(r#"{"nodes":{}}"#).unwrap();
+        let have = parse(SAMPLE).unwrap(); // nodes 100, 200, 300; gems Caustic Arrow, Added Chaos, Herald of Agony
+        let d0 = diff(&plan, 0, &tree, &have);
+        assert_eq!((d0.missing, d0.extra, d0.missing_gems), (vec![], vec![300], vec![]));
+        let d1 = diff(&plan, 1, &tree, &have);
+        assert_eq!((d1.missing, d1.extra, d1.missing_gems), (vec![400], vec![], vec!["Pride".to_string()]));
+    }
 
     const SAMPLE: &str = r#"{"character":{"name":"Zed","class":"Pathfinder","level":40,"league":"Standard",
       "equipment":[{"inventory_id":"BodyArmour","sockets":[{"group":0},{"group":0},{"group":1}],
