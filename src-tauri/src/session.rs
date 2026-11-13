@@ -22,6 +22,7 @@ static SESSION: LazyLock<Mutex<Session>> = LazyLock::new(|| Mutex::new(Session::
 
 const BUILD_FILE: &str = "build.txt";
 const MAX_PASSIVES_SHOWN: usize = 40;
+const NOTES_MAX: usize = 3000;
 
 #[derive(Default)]
 struct Session {
@@ -114,6 +115,8 @@ pub struct PlanView {
     pub new_gems: Vec<String>,
     pub gems: Vec<Vec<GemView>>,
     pub gear: Vec<GearView>,
+    /// the build's notes, capped: they travel with every snapshot
+    pub notes: String,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug, Default)]
@@ -283,6 +286,7 @@ impl Session {
                         GearView { slot: g.slot.clone(), name, base, changed: g.changed }
                     })
                     .collect(),
+                notes: p.notes.chars().take(NOTES_MAX).collect(),
             })
         });
         Views { route, plan }

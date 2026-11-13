@@ -37,6 +37,7 @@
         new_gems: string[];
         gems: { name: string; support: boolean }[][];
         gear: { slot: string; name: string; base: string; changed: boolean }[];
+        notes: string;
       } | null;
     };
   };
@@ -78,6 +79,20 @@
       .filter((g) => g.length),
   );
   const changedGear =$derived(plan?.gear.filter((g) => g.changed) ?? []);
+
+  // level-up toasts: max 2 at once, 6 s each; the first level seen after start is not a level-up
+  let toasts = $state<{ id: number; text: string }[]>([]);
+  let lastLevel = 0;
+  $effect(() => {
+    const lv = snap?.state.level ?? 0;
+    if (lastLevel && lv > lastLevel) {
+      const id = Date.now();
+      const pts = plan?.budget != null ? Math.max(0, plan.budget - plan.spent_before) : 0;
+      toasts = [...toasts, { id, text: `Level ${lv}${pts ? ` · ${pts} passive points to spend` : ""}` }].slice(-2);
+      setTimeout(() => (toasts = toasts.filter((t) => t.id !== id)), 6000);
+    }
+    if (lv) lastLevel = lv;
+  });
 
   let copied = $state("");
   // write-only and only on a user click, so it stays within the GGG overlay rules
@@ -137,6 +152,10 @@
         <span class="alvl">area {snap.state.area_level}</span>
       {/if}
     {/if}
+  </div>
+
+  <div class="toasts" aria-live="polite">
+    {#each toasts as t (t.id)}<p class="toast">{t.text}</p>{/each}
   </div>
 
   <div class="col">
@@ -244,6 +263,15 @@
             {/each}
           </ul>
           <p class="hint">Click an item to copy its stash search</p>
+        </section>
+        </Widget>
+      {/if}
+
+      {#if plan.notes.trim() && panel}
+        <Widget id="notes" {edit}>
+        <section class="card notes">
+          <header><span class="eyebrow">Build notes</span></header>
+          <p class="notes-body">{plan.notes}</p>
         </section>
         </Widget>
       {/if}
@@ -650,6 +678,34 @@
     font-weight: 500;
     color: var(--strong);
   }
+  .notes-body {
+    max-height: 260px;
+    margin-top: 8px;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    color: var(--text);
+  }
+  .toasts {
+    position: absolute;
+    top: 52px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+  .toast {
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--blurple);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    animation: in 0.16s ease-out;
+  }
   button.copy {
     display: flex;
     gap: 8px;
@@ -755,7 +811,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .card {
+    .card,
+    .toast {
       animation: none;
     }
     .bar i {
