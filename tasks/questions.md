@@ -46,7 +46,7 @@ Start with `npm run tauri dev` while PoE runs (Windowed/Borderless). Your Ranger
 - Not measured yet: idle CPU/RAM over a long session, FPS impact (T29, after your playtest). The watcher now only rebuilds views when a log line arrives.
 - Only 3 real builds tested; a single-spec build (auto-order path) is tested on the Ranger's endgame tree only.
 - Hide hotkey and tray menu were not verified automatically.
-- Security (T30): no cargo-fuzz run, no `cargo audit`, release-build CSP not checked.
+- Security (T30): `cargo audit` and `npm audit` run on 2026-11-13: no vulnerabilities, 2 warnings (glib unsound, proc-macro-error unmaintained) from the Linux GTK stack of Tauri, which a Windows build does not use. Still open: no cargo-fuzz run, release-build CSP not checked.
 - Not done by agreement: T29 performance and T31 installer/README, after everything else is finished.
 - My test runs against a fake Client.txt stopped your own `npm run tauri dev` once (I matched processes by project path): restart it if the overlay is gone.
 
