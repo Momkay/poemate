@@ -20,8 +20,12 @@ pub struct Snapshot {
     pub state: State,
     /// "searching" | "ok" | "not-found" | "error"
     pub log: String,
+    /// where Client.txt was found (empty until it is)
+    pub log_path: String,
     pub views: Views,
 }
+
+static LOG_PATH: Mutex<String> = Mutex::new(String::new());
 
 static SNAP: LazyLock<Mutex<Snapshot>> = LazyLock::new(|| Mutex::new(Snapshot { log: "searching".into(), ..Default::default() }));
 
@@ -32,7 +36,7 @@ pub fn snapshot() -> Snapshot {
 }
 
 fn publish(app: &AppHandle, state: &State, log: &str) {
-    let next = Snapshot { state: state.clone(), log: log.into(), views: session::views(state) };
+    let next = Snapshot { state: state.clone(), log: log.into(), log_path: LOG_PATH.lock().unwrap().clone(), views: session::views(state) };
     let mut cur = SNAP.lock().unwrap();
     if *cur != next {
         *cur = next.clone();
@@ -65,6 +69,8 @@ pub fn spawn(app: AppHandle) {
             publish(&app, &parser.state, "not-found");
             std::thread::sleep(Duration::from_secs(5));
         };
+
+        *LOG_PATH.lock().unwrap() = path.display().to_string();
 
         // learn the current zone/level from the end of the existing log; those events are not replayed into the route
         for line in recent_lines(&path, 256 * 1024) {

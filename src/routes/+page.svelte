@@ -3,55 +3,17 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import Widget from "$lib/Widget.svelte";
-  import { i18n, t, type Key } from "$lib/i18n.svelte";
-  import { layout, loadLayout, resetLayout, saveSoon, sizeKey } from "$lib/layout.svelte";
-
-  type Kind = "Normal" | "Notable" | "Keystone" | "Mastery" | "Jewel" | "Root";
-  type Snapshot = {
-    log: "searching" | "ok" | "not-found" | "error";
-    state: { area_name: string; area_level: number; level: number; town: boolean; character: string | null };
-    views: {
-      route: {
-        act: number;
-        index: number;
-        act_step: number;
-        act_total: number;
-        step: string;
-        label: string;
-        hints: string[];
-        next: string[];
-        rewards: { gem: string; how: "Take" | "Buy"; npc: string }[];
-        passive_points: number;
-      } | null;
-      plan: {
-        stage: number;
-        stage_title: string;
-        stages: string[];
-        manual: boolean;
-        auto_order: boolean;
-        passives_total: number;
-        passives_available: number;
-        budget: number | null;
-        spent_before: number;
-        tree: { x: number; y: number; from: [number, number] | null; kind: Kind; state: "done" | "now" | "later" }[];
-        passives: { name: string; kind: Kind; stats: string[]; known: boolean; available: boolean }[];
-        masteries: [string, string[]][];
-        new_gems: string[];
-        gems: { name: string; support: boolean }[][];
-        gear: { slot: string; name: string; base: string; changed: boolean }[];
-        notes: string;
-      } | null;
-    };
-  };
+  import Settings from "$lib/Settings.svelte";
+  import { i18n, t } from "$lib/i18n.svelte";
+  import { keyOf, loadBinds } from "$lib/hotkeys.svelte";
+  import { layout, loadLayout, saveSoon, sizeKey } from "$lib/layout.svelte";
+  import type { Kind, Snapshot } from "$lib/types";
 
   const GLYPH: Record<Kind, string> = { Normal: "·", Notable: "◆", Keystone: "★", Mastery: "◇", Jewel: "●", Root: "·" };
 
   let edit = $state(false);
   let poeFound = $state(true);
   let snap = $state<Snapshot | null>(null);
-  let input = $state("");
-  let importMsg = $state("");
-  let busy = $state(false);
   let panel = $state(false);
 
   const route = $derived(snap?.views.route ?? null);
@@ -103,60 +65,15 @@
     if (lv) lastLevel = lv;
   });
 
-  type Binding = { id: string; label: string; keys: string };
-  let binds = $state<Binding[]>([]);
-  let capturing = $state("");
-  let bindMsg = $state("");
-  const pretty = (k: string) => k.replace(/Key|Digit|Arrow/g, "");
-  const keyOf = (id: string) => pretty(binds.find((b) => b.id === id)?.keys ?? "");
-
-  // turns a key press into the text the backend parses, e.g. "Ctrl+Shift+KeyO"
-  async function capture(e: KeyboardEvent, id: string) {
-    e.preventDefault();
-    if (e.key === "Escape") return void (capturing = "");
-    if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
-    const keys = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.code].filter(Boolean).join("+");
-    try {
-      binds = await invoke<Binding[]>("hotkeys_set", { id, keys });
-      bindMsg = "";
-    } catch (err) {
-      bindMsg = String(err);
-    }
-    capturing = "";
-  }
-
   let ready = $state(false);
   $effect(() => void (i18n.lang = layout.settings.lang));
-  const wizard = $derived(ready && !layout.settings.onboarded);
-  const setLang = (l: "en" | "nl") => {
-    layout.settings.lang = l;
-    saveSoon();
-  };
-  const setQuests = (q: "essential" | "all") => {
-    layout.settings.quests = q;
-    saveSoon();
-    invoke("quest_mode", { allQuests: q === "all" });
-  };
-  const setBandit = (e: Event) => {
-    layout.settings.bandit = (e.currentTarget as HTMLSelectElement).value as typeof layout.settings.bandit;
-    saveSoon();
-    invoke("bandit_choice", { choice: layout.settings.bandit });
-  };
-  let logPath = $state("");
-  let logMsg = $state("");
-  async function pickLog() {
-    try {
-      await invoke("set_log_path", { path: logPath });
-      logMsg = t("logPickSaved");
-      logPath = "";
-    } catch (e) {
-      logMsg = String(e);
+  // the first time the settings are opened the play-mode hint has done its job
+  $effect(() => {
+    if (edit && ready && !layout.settings.onboarded) {
+      layout.settings.onboarded = true;
+      saveSoon();
     }
-  }
-  const finish = () => {
-    layout.settings.onboarded = true;
-    saveSoon();
-  };
+  });
 
   let copied = $state("");
   // write-only and only on a user click, so it stays within the GGG overlay rules
@@ -168,29 +85,10 @@
     } catch {}
   }
 
-  async function removeBuild() {
-    await invoke("remove_build");
-    importMsg = t("removed");
-  }
-
-  async function doImport() {
-    if (!input.trim() || busy) return;
-    busy = true;
-    importMsg = t("importing");
-    try {
-      const s = await invoke<{ class: string; ascendancy: string; stages: number }>("import_build", { input });
-      importMsg = t("loaded", { name: s.ascendancy || s.class, n: s.stages });
-      input = "";
-    } catch (e) {
-      importMsg = String(e);
-    } finally {
-      busy = false;
-    }
-  }
-
   onMount(() => {
     loadLayout().then(() => (ready = true));
-    invoke<Binding[]>("hotkeys_get").then((b) => (binds = b));
+    void loadBinds();
+    void invoke<boolean>("is_edit").then((on) => (edit = on));
     const onResize = () => (layout.key = sizeKey());
     window.addEventListener("resize", onResize);
     invoke<Snapshot>("snapshot").then((s) => (snap ??= s));
@@ -344,104 +242,17 @@
 
   </div>
 
-  <!-- settings sit bottom right: the top left is where people keep their own panels -->
+  <!-- bottom right: the top left is where people keep their own panels -->
   <aside class="settings">
-    {#if snap?.log === "not-found"}
-      <section class="card editbox">
-        <header><span class="eyebrow">{t("logPickTitle")}</span></header>
-        {#if edit}
-          <input bind:value={logPath} placeholder={t("logPickPlaceholder")} onkeydown={(e) => e.key === "Enter" && pickLog()} />
-          <div class="row"><button onclick={pickLog}>{t("logPickBtn")}</button></div>
-          {#if logMsg}<p class="next">{logMsg}</p>{/if}
-          <p class="hint">{t("logPickHint")}</p>
-        {:else}
-          <p class="next">{t("wizHint", { key: keyOf("edit") })}</p>
-        {/if}
-      </section>
-    {/if}
-
-    {#if wizard}
-      <section class="card">
-        <header><span class="eyebrow">{t("welcome")}</span></header>
-        {#if edit}
-          <p class="langs">
-            <span class="eyebrow">{t("language")}</span>
-            {#each ["en", "nl"] as const as l}<button class:on={layout.settings.lang === l} onclick={() => setLang(l)}>{l.toUpperCase()}</button>{/each}
-          </p>
-          <ul class="list">
-            <li class:locked={snap?.log !== "ok"}>{snap?.log === "ok" ? "✓" : "○"} {t("wizLog")}</li>
-            <li class:locked={!poeFound}>{poeFound ? "✓" : "○"} {t("wizWindow")}</li>
-            <li class:locked={!plan}>{plan ? "✓" : "○"} {t("wizBuild")}</li>
-          </ul>
-          <div class="row"><button onclick={finish}>{t("wizDone")}</button></div>
-        {:else}
-          <p class="next">{t("wizHint", { key: keyOf("edit") })}</p>
-        {/if}
-      </section>
-    {/if}
-
     {#if edit}
-      <section class="card editbox">
-        <header><span class="eyebrow">{t("importTitle")}</span></header>
-        <input bind:value={input} placeholder={t("importPlaceholder")} onkeydown={(e) => e.key === "Enter" && doImport()} />
-        <div class="row">
-          <button onclick={doImport} disabled={busy}>{t("importBtn")}</button>
-          <button onclick={() => invoke("route_step", { delta: -1 })}>{t("stepPrev")}</button>
-          <button onclick={() => invoke("route_step", { delta: 1 })}>{t("stepNext")}</button>
-        </div>
-        {#if plan}<div class="row"><button class="plain" onclick={removeBuild}>{t("removeBuild")}</button></div>{/if}
-        {#if importMsg}<p class="next">{importMsg}</p>{/if}
-        <label class="slider">{t("opacity")}
-          <input type="range" min="0.2" max="1" step="0.05" bind:value={layout.settings.opacity} oninput={saveSoon} />
-        </label>
-        <div class="row">
-          <button onclick={() => { layout.settings.density = layout.settings.density === "cozy" ? "compact" : "cozy"; saveSoon(); }}>
-            {layout.settings.density === "cozy" ? t("compact") : t("cozy")}
-          </button>
-          <button onclick={resetLayout}>{t("resetLayout")}</button>
-        </div>
-        <p class="hint">{t("dragHint")}</p>
-        <p class="langs">
-          <span class="eyebrow">{t("questsTitle")}</span>
-          {#each ["essential", "all"] as const as q}
-            <button class:on={layout.settings.quests === q} onclick={() => setQuests(q)}>{q === "all" ? t("questsAll") : t("questsEssential")}</button>
-          {/each}
-        </p>
-        <p class="hint">{t("questsHint")}</p>
-        <label class="slider">{t("banditTitle")}
-          <select value={layout.settings.bandit} onchange={setBandit}>
-            {#each ["build", "kill", "alira", "oak", "kraityn"] as b}
-              <option value={b}>{t(`bandit${b[0].toUpperCase()}${b.slice(1)}` as Key)}</option>
-            {/each}
-          </select>
-        </label>
-        <p class="langs">
-          <span class="eyebrow">{t("language")}</span>
-          {#each ["en", "nl"] as const as l}<button class:on={layout.settings.lang === l} onclick={() => setLang(l)}>{l.toUpperCase()}</button>{/each}
-        </p>
-        <details>
-          <summary class="eyebrow">{t("hotkeys")}</summary>
-          <ul class="list">
-            {#each binds as b}
-              <li>
-                <span class="slot">{t(`act.${b.id}` as Key)}</span>
-                <button class="key" onclick={() => (capturing = b.id)} onkeydown={(e) => capturing === b.id && capture(e, b.id)} onblur={() => (capturing = "")}>
-                  {capturing === b.id ? t("pressKeys") : pretty(b.keys)}
-                </button>
-              </li>
-            {/each}
-          </ul>
-          {#if bindMsg}<p class="next warn">{bindMsg}</p>{/if}
-          <p class="hint">{t("hotkeyHint")}</p>
-        </details>
-        <p class="hint">{t("disclaimer")}</p>
-      </section>
-    {/if}
-    {#if !edit}
-      <p class="foot">{t("footer", { edit: keyOf("edit"), hide: keyOf("hide") })}</p>
-    {/if}
-    {#if !poeFound}
-      <p class="foot warn">{t("noPoe")}</p>
+      <Settings {snap} {poeFound} />
+    {:else}
+      {#if snap?.log === "not-found"}
+        <p class="foot warn">{t("logHint", { key: keyOf("edit") })}</p>
+      {:else}
+        <p class="foot">{t("footer", { edit: keyOf("edit"), hide: keyOf("hide") })}</p>
+      {/if}
+      {#if !poeFound}<p class="foot warn">{t("noPoe")}</p>{/if}
     {/if}
   </aside>
 </main>
@@ -451,27 +262,6 @@
      legibility and a very faint scrim (the Opacity setting). Only what you operate (settings, the T panel, toasts)
      is a solid surface. One neutral ink, one sage accent that means "now" or "gain", one amber and one red for
      warnings. One typeface; three sizes do the work: 17 for the step, 13-14 for text, 12 for notes. */
-  :global(:root) {
-    --ink: #ece9e2;
-    --ink-2: rgba(236, 233, 226, 0.62);
-    --ink-3: rgba(236, 233, 226, 0.42);
-    --accent: #8fc9a6;
-    --warn: #d9b36a;
-    --bad: #d9755f;
-    --surface: 20, 22, 25;
-    --surface-2: 36, 39, 43;
-    --hover: #30353b;
-    --edge: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.55);
-  }
-  :global(html, body) {
-    margin: 0;
-    background: transparent;
-    overflow: hidden;
-    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-    font-size: 14px;
-    color: var(--ink);
-    user-select: none;
-  }
   main {
     position: fixed;
     inset: 0;
@@ -735,8 +525,7 @@
     width: 560px;
   }
   .card.panel,
-  .card.notes,
-  .settings .card {
+  .card.notes {
     background: rgba(var(--surface), 0.94);
     text-shadow: none;
   }
@@ -826,114 +615,9 @@
     bottom: 19vh;
     display: flex;
     flex-direction: column;
+    align-items: flex-end;
     gap: 8px;
-    width: 300px;
-    max-height: calc(81vh - 18px);
-    overflow-y: auto;
-  }
-  .settings .card {
-    padding: 12px;
-    border-radius: 8px;
-  }
-  .editbox input:not([type]) {
-    width: 100%;
-    box-sizing: border-box;
-    margin-top: 8px;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 6px;
-    background: rgb(var(--surface-2));
-    color: var(--ink);
-    font: inherit;
-    font-size: 13px;
-    user-select: text;
-  }
-  .editbox input:focus {
-    outline: 1px solid var(--accent);
-  }
-  summary {
-    margin-top: 10px;
-    cursor: pointer;
-  }
-  .langs {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 10px;
-  }
-  .langs .eyebrow {
-    margin-right: auto;
-  }
-  .langs button.on {
-    background: var(--accent);
-    color: #10231a;
-  }
-  .slider {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-top: 10px;
-    font-size: 13px;
-  }
-  .slider select {
-    padding: 4px 6px;
-    border: 0;
-    border-radius: 6px;
-    background: rgb(var(--surface-2));
-    color: var(--ink);
-    font: inherit;
-    font-size: 13px;
-  }
-  .slider input {
-    width: 140px;
-    margin: 0;
-    padding: 0;
-    accent-color: var(--accent);
-  }
-  .row {
-    display: flex;
-    gap: 6px;
-    margin-top: 8px;
-  }
-  button {
-    padding: 6px 12px;
-    border: 0;
-    border-radius: 6px;
-    background: rgb(var(--surface-2));
-    color: var(--ink);
-    font: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-  button:hover:not(:disabled) {
-    background: var(--hover);
-  }
-  .row button:first-child {
-    background: var(--accent);
-    color: #10231a;
-  }
-  .row button:first-child:hover:not(:disabled) {
-    background: #a3d6b8;
-  }
-  .row button.plain {
-    background: rgb(var(--surface-2));
-    color: var(--ink);
-  }
-  .row button.plain:hover:not(:disabled) {
-    background: var(--hover);
-  }
-  button.key {
-    padding: 2px 8px;
-    font-size: 12px;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  button:focus-visible {
-    outline: 1px solid var(--accent);
+    width: 380px;
   }
 
   @keyframes in {

@@ -30,11 +30,15 @@ fn file(dir: &Path) -> std::path::PathBuf {
     dir.join("hotkeys.json")
 }
 
+pub fn defaults() -> BTreeMap<&'static str, String> {
+    ACTIONS.iter().map(|a| (a.0, a.2.to_string())).collect()
+}
+
 /// Defaults overlaid with the saved choices. A missing, corrupt or unusable entry falls back to its default; an action
 /// whose saved keys another action already has goes back to its default too (swaps are fine: all saved keys count first).
 pub fn load(dir: &Path) -> BTreeMap<&'static str, String> {
     let saved: BTreeMap<String, String> = std::fs::read_to_string(file(dir)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    let defaults: BTreeMap<_, _> = ACTIONS.iter().map(|a| (a.0, a.2.to_string())).collect();
+    let defaults = defaults();
     let mut out = defaults.clone();
     for (id, keys) in saved {
         let Some(slot) = ACTIONS.iter().find(|a| a.0 == id) else { continue };

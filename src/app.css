@@ -1,0 +1,24 @@
+/* Tokens and base shared by every component. Components only use these variables. */
+:root {
+  --ink: #ece9e2;
+  --ink-2: rgba(236, 233, 226, 0.62);
+  --ink-3: rgba(236, 233, 226, 0.42);
+  --accent: #8fc9a6;
+  --warn: #d9b36a;
+  --bad: #d9755f;
+  --surface: 20, 22, 25;
+  --surface-2: 36, 39, 43;
+  --hover: #30353b;
+  --edge: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.55);
+}
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  user-select: none;
+}

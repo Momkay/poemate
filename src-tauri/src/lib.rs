@@ -134,6 +134,37 @@ fn remove_build(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
+fn is_edit() -> bool {
+    EDIT.load(Ordering::Relaxed)
+}
+
+#[tauri::command]
+fn exit_edit(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        set_edit(&w, false);
+    }
+}
+
+#[tauri::command]
+fn hotkeys_reset(app: tauri::AppHandle) -> Result<Vec<hotkeys::Binding>, String> {
+    let dir = app.path().app_config_dir().unwrap_or_default();
+    let map = hotkeys::defaults();
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    let mut bound = Vec::new();
+    for (id, keys) in &map {
+        // a key another app owns stays unbound; it can be changed again
+        if let Some(sc) = keys.parse::<Shortcut>().ok().filter(|sc| gs.register(*sc).is_ok()) {
+            bound.push((*id, sc));
+        }
+    }
+    hotkeys::save(&dir, &map).map_err(|e| e.to_string())?;
+    hotkeys::set_bound(bound);
+    update_tray(&app, &map);
+    Ok(hotkeys::view(&map))
+}
+
+#[tauri::command]
 fn route_step(app: tauri::AppHandle, delta: i32) {
     session::step(delta);
     watcher::refresh(&app);
@@ -226,7 +257,8 @@ pub fn run() {
                 let _ = w.set_position(*m.position());
                 let _ = w.set_size(*m.size());
             }
-            set_edit(&w, false);
+            // development aid next to POEMATE_ALWAYS_SHOW: open straight in edit mode (screenshots of the settings)
+            set_edit(&w, std::env::var_os("POEMATE_START_EDIT").is_some());
             let mut bound = Vec::new();
             for (id, keys) in hotkeys::load(&app.path().app_config_dir().unwrap_or_default()) {
                 let Ok(sc) = keys.parse::<Shortcut>() else { continue };
@@ -265,7 +297,7 @@ pub fn run() {
             watcher::spawn(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, quest_mode, remove_build, set_log_path, bandit_choice, hotkeys_get, hotkeys_set, layout_load, layout_save])
+        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, is_edit, exit_edit, hotkeys_reset, quest_mode, remove_build, set_log_path, bandit_choice, hotkeys_get, hotkeys_set, layout_load, layout_save])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
