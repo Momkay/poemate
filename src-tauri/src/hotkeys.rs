@@ -30,18 +30,27 @@ fn file(dir: &Path) -> std::path::PathBuf {
     dir.join("hotkeys.json")
 }
 
-/// Defaults overlaid with the saved choices; a missing, corrupt or unparsable entry falls back to its default.
+/// Defaults overlaid with the saved choices. A missing, corrupt or unusable entry falls back to its default; an action
+/// whose saved keys another action already has goes back to its default too (swaps are fine: all saved keys count first).
 pub fn load(dir: &Path) -> BTreeMap<&'static str, String> {
     let saved: BTreeMap<String, String> = std::fs::read_to_string(file(dir)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    let mut out: BTreeMap<_, _> = ACTIONS.iter().map(|a| (a.0, a.2.to_string())).collect();
+    let defaults: BTreeMap<_, _> = ACTIONS.iter().map(|a| (a.0, a.2.to_string())).collect();
+    let mut out = defaults.clone();
     for (id, keys) in saved {
         let Some(slot) = ACTIONS.iter().find(|a| a.0 == id) else { continue };
-        let others: BTreeMap<_, _> = out.iter().filter(|(k, _)| **k != slot.0).map(|(k, v)| (*k, v.clone())).collect();
-        if check(&others, &keys).is_ok() {
+        if keys.parse::<Shortcut>().is_ok_and(|sc| !sc.mods.is_empty()) {
             out.insert(slot.0, keys);
         }
     }
-    out
+    let parse = |m: &BTreeMap<&str, String>, id: &str| m[id].parse::<Shortcut>().ok();
+    for (i, a) in ACTIONS.iter().enumerate() {
+        if ACTIONS[..i].iter().any(|b| parse(&out, b.0) == parse(&out, a.0)) {
+            out.insert(a.0, defaults[a.0].clone());
+        }
+    }
+    // a default can still collide with someone's saved keys: then the file is not trustworthy as a whole
+    let all: Vec<_> = ACTIONS.iter().map(|a| parse(&out, a.0)).collect();
+    if all.iter().enumerate().any(|(i, k)| all[..i].contains(k)) { defaults } else { out }
 }
 
 pub fn save(dir: &Path, map: &BTreeMap<&'static str, String>) -> std::io::Result<()> {
@@ -115,6 +124,17 @@ mod tests {
         assert_eq!(m["panel"], "Ctrl+Shift+KeyT");
         save(&dir, &m).unwrap();
         assert_eq!(load(&dir), m);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn two_actions_can_swap_keys_and_it_survives_a_restart() {
+        let dir = std::env::temp_dir().join(format!("poemate-hk-swap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // edit takes the old hide key, hide moves away: saved alphabetically, edit comes first
+        std::fs::write(file(&dir), r#"{"edit":"Ctrl+Shift+KeyH","hide":"Ctrl+Alt+KeyH"}"#).unwrap();
+        let m = load(&dir);
+        assert_eq!((m["edit"].as_str(), m["hide"].as_str()), ("Ctrl+Shift+KeyH", "Ctrl+Alt+KeyH"));
         let _ = std::fs::remove_dir_all(dir);
     }
 }

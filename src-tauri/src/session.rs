@@ -32,7 +32,8 @@ struct Session {
     cursor: usize,
     /// manual stage choice; cleared when the level moves to another stage by itself
     stage_override: Option<usize>,
-    auto_stage: Option<usize>,
+    /// the stage the level picks; None = not seen yet, so the first value never clears a saved manual choice
+    auto_stage: Option<Option<usize>>,
     character: Option<String>,
     league_start: bool,
 }
@@ -174,10 +175,10 @@ impl Session {
         }
         if let Some(plan) = &self.plan {
             let auto = plan.stage_at(level);
-            if auto != self.auto_stage {
-                self.auto_stage = auto;
+            if self.auto_stage.is_some_and(|prev| prev != auto) {
                 self.stage_override = None;
             }
+            self.auto_stage = Some(auto);
         }
     }
 
@@ -311,6 +312,7 @@ pub fn on_events(events: &[Event], state: &State) {
 /// After the log was read for the first time: place the route at the zone the player is in right now.
 pub fn sync_to_current_area(state: &State) {
     let mut s = SESSION.lock().unwrap();
+    s.auto_stage = s.plan.as_ref().map(|p| p.stage_at(state.level));
     if let Some(c) = state.character.clone() {
         s.character = Some(c.clone());
         if let Some(saved) = s.load_progress(&c) {
@@ -324,7 +326,6 @@ pub fn sync_to_current_area(state: &State) {
             s.cursor = e.progress.cursor;
         }
     }
-    s.auto_stage = s.plan.as_ref().and_then(|p| p.stage_at(state.level));
 }
 
 fn make_plan(text: &str, cfg: &Path, league_start: bool) -> Result<(Plan, HashSet<String>), String> {
@@ -332,7 +333,15 @@ fn make_plan(text: &str, cfg: &Path, league_start: bool) -> Result<(Plan, HashSe
     let build = pob_model::parse(&xml).map_err(|_| "That isn't a Path of Building export".to_string())?;
     let tree = tree::load(cfg, false, tree::download).map_err(|_| "Couldn't load the passive tree data (offline?)".to_string())?;
     let flags = flags_for(&build.bandit, league_start);
-    Ok((plan::build(&build, &tree), flags))
+    let mut plan = plan::build(&build, &tree);
+    // ids above 65535 are cluster jewel nodes and never in the export; any other unknown id means an old cache
+    let unknown = plan.stages.iter().flat_map(|s| &s.passives).any(|p| !p.known && p.id <= 65535);
+    if unknown && tree::cache_older_than(cfg, 24 * 3600) {
+        if let Ok(fresh) = tree::load(cfg, true, tree::download) {
+            plan = plan::build(&build, &fresh);
+        }
+    }
+    Ok((plan, flags))
 }
 
 #[derive(Serialize)]
@@ -343,12 +352,15 @@ pub struct ImportSummary {
     pub auto_order: bool,
 }
 
-fn install(plan: Plan, flags: HashSet<String>) -> ImportSummary {
+/// `keep_stage`: a restored build keeps the manual stage loaded for the character; a new import starts fresh.
+fn install(plan: Plan, flags: HashSet<String>, keep_stage: bool) -> ImportSummary {
     let summary = ImportSummary { class: plan.class.clone(), ascendancy: plan.ascendancy.clone(), stages: plan.stages.len(), auto_order: plan.auto_order };
     let mut s = SESSION.lock().unwrap();
     s.plan = Some(plan);
     s.flags = flags;
-    s.stage_override = None;
+    if !keep_stage {
+        s.stage_override = None;
+    }
     s.auto_stage = None;
     summary
 }
@@ -363,7 +375,7 @@ pub fn import(input: &str) -> Result<ImportSummary, String> {
     let (plan, flags) = make_plan(&text, &cfg, league_start)?;
     let _ = std::fs::create_dir_all(&cfg);
     let _ = std::fs::write(cfg.join(BUILD_FILE), &text);
-    Ok(install(plan, flags))
+    Ok(install(plan, flags, false))
 }
 
 /// Blocking: reload the build saved by the last import, if any.
@@ -375,7 +387,7 @@ pub fn restore() {
     if let Ok(text) = std::fs::read_to_string(cfg.join(BUILD_FILE)) {
         match make_plan(&text, &cfg, league_start) {
             Ok((plan, flags)) => {
-                install(plan, flags);
+                install(plan, flags, true);
             }
             Err(e) => eprintln!("restoring the saved build failed: {e}"),
         }
@@ -469,6 +481,20 @@ mod tests {
         s.on_event(&Event::LevelChanged { level: 33 }, 33);
         let v = s.views(33).plan.unwrap();
         assert_eq!((v.stage_title.as_str(), v.manual), ("2) Normal Lab", false)); // auto stage changed: override cleared
+    }
+
+    #[test]
+    fn a_saved_manual_stage_survives_a_restart_and_the_first_zone_change() {
+        let t = tempfile::tempdir().unwrap();
+        let mut before = session_with_plan(t.path());
+        before.character = Some("Ranger".into());
+        before.stage_override = Some(5);
+        before.save_progress();
+
+        let mut after = session_with_plan(t.path());
+        after.on_event(&Event::CharacterDetected { name: "Ranger".into(), class: "Ranger".into() }, 5);
+        after.on_event(&Event::AreaChanged { id: "1_1_town".into(), name: "Lioneye's Watch".into(), level: 5, town: true }, 5);
+        assert_eq!(after.stage_override, Some(5));
     }
 
     #[test]

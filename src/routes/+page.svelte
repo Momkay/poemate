@@ -87,8 +87,12 @@
   // level-up toasts: max 2 at once, 6 s each; the first level seen after start is not a level-up
   let toasts = $state<{ id: number; text: string }[]>([]);
   let lastLevel = 0;
+  let lastChar: string | null = null;
   $effect(() => {
     const lv = snap?.state.level ?? 0;
+    const who = snap?.state.character ?? null;
+    if (who !== lastChar) lastLevel = 0; // another character: its level is a start, not a level-up
+    lastChar = who;
     if (lastLevel && lv > lastLevel) {
       const id = Date.now();
       const pts = plan?.budget != null ? Math.max(0, plan.budget - plan.spent_before) : 0;
@@ -194,7 +198,7 @@
   </div>
 
   <div class="toasts" aria-live="polite">
-    {#each toasts as t (t.id)}<p class="toast">{t.text}</p>{/each}
+    {#each toasts as toast (toast.id)}<p class="toast">{toast.text}</p>{/each}
   </div>
 
   <div class="col">

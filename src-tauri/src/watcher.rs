@@ -74,6 +74,7 @@ pub fn spawn(app: AppHandle) {
         let mut tail = Tailer::new(path);
         publish(&app, &parser.state, "ok");
 
+        let mut log_error = false;
         loop {
             std::thread::sleep(Duration::from_millis(250));
             if !ACTIVE.load(Ordering::Relaxed) {
@@ -85,9 +86,18 @@ pub fn spawn(app: AppHandle) {
                     if !events.is_empty() {
                         session::on_events(&events, &parser.state);
                     }
-                    publish(&app, &parser.state, "ok");
+                    // building the views is not free: only when a line arrived or the log came back from an error
+                    if !lines.is_empty() || log_error {
+                        publish(&app, &parser.state, "ok");
+                    }
+                    log_error = false;
                 }
-                Err(_) => publish(&app, &parser.state, "error"),
+                Err(_) => {
+                    if !log_error {
+                        publish(&app, &parser.state, "error");
+                    }
+                    log_error = true;
+                }
             }
         }
     });

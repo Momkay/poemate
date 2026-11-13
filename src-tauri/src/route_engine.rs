@@ -81,6 +81,7 @@ impl<'a> Engine<'a> {
     }
 
     /// Act of the step the cursor is on.
+    #[cfg(test)]
     pub fn act(&self) -> Option<u32> {
         self.current().map(|s| s.act)
     }

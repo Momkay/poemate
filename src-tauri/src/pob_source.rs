@@ -2,13 +2,11 @@
 //! Network only runs when the user triggers an import, only to the two known hosts, with size and time caps.
 
 use std::io::Read;
-use std::path::Path;
 use std::time::Duration;
 
 use crate::pob::{self, DecodeError};
 
 const MAX_DOWNLOAD: u64 = 2 << 20;
-const MAX_FILE: u64 = 32 << 20;
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -26,7 +24,6 @@ pub enum ImportError {
     BadResponse,
     TooLarge,
     Decode(DecodeError),
-    File,
 }
 
 impl std::fmt::Display for ImportError {
@@ -39,7 +36,6 @@ impl std::fmt::Display for ImportError {
             Self::BadResponse => "The site returned something unexpected",
             Self::TooLarge => "The download is too large",
             Self::Decode(_) => "That isn't a valid Path of Building code",
-            Self::File => "Couldn't read that file",
         })
     }
 }
@@ -100,7 +96,8 @@ pub fn resolve(input: &str) -> Result<String, ImportError> {
     }
 }
 
-/// Code, link or pasted XML in, PoB XML out.
+/// Code, link or pasted XML in, PoB XML out (the app resolves and parses in two steps; tests use this one).
+#[cfg(test)]
 pub fn import(input: &str) -> Result<String, ImportError> {
     from_text(&resolve(input)?)
 }
@@ -110,17 +107,6 @@ pub fn from_text(text: &str) -> Result<String, ImportError> {
         return Ok(text.to_string()); // already XML (a saved PoB file)
     }
     pob::decode(text).map_err(ImportError::Decode)
-}
-
-pub fn import_file(path: &Path) -> Result<String, ImportError> {
-    let mut buf = Vec::new();
-    std::fs::File::open(path)
-        .and_then(|f| f.take(MAX_FILE + 1).read_to_end(&mut buf))
-        .map_err(|_| ImportError::File)?;
-    if buf.len() as u64 > MAX_FILE {
-        return Err(ImportError::TooLarge);
-    }
-    from_text(&String::from_utf8(buf).map_err(|_| ImportError::File)?)
 }
 
 #[cfg(test)]
@@ -204,14 +190,5 @@ mod tests {
     fn live_pobb_in_link_matches_the_fixture() {
         let live = import("https://pobb.in/Ig1GGqCA_Zp3").unwrap();
         assert_eq!(live, import(include_str!("../../fixtures/pob/real1.txt")).unwrap());
-    }
-
-    #[test]
-    fn local_files_work_as_code_or_xml_and_missing_file_errors() {
-        let t = tempfile::tempdir().unwrap();
-        let p = t.path().join("build.xml");
-        std::fs::write(&p, "<PathOfBuilding/>").unwrap();
-        assert_eq!(import_file(&p).unwrap(), "<PathOfBuilding/>");
-        assert_eq!(import_file(&t.path().join("nope.xml")), Err(ImportError::File));
     }
 }

@@ -183,6 +183,15 @@ pub fn load(cache_dir: &Path, force: bool, fetch: impl Fn() -> Result<String, Tr
     }
 }
 
+/// True when the cached tree is missing or older than `secs`: a new league's tree should not wait for a manual delete.
+pub fn cache_older_than(cache_dir: &Path, secs: u64) -> bool {
+    std::fs::metadata(cache_dir.join(CACHE_FILE))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_none_or(|age| age.as_secs() > secs)
+}
+
 pub fn download() -> Result<String, TreeError> {
     use std::io::Read;
     let client = reqwest::blocking::Client::builder()
@@ -402,5 +411,13 @@ mod tests {
         assert!(matches!(load(empty.path(), false, || Err(TreeError::Offline)), Err(TreeError::Offline)));
         std::fs::write(dir.path().join(CACHE_FILE), "not json").unwrap();
         assert!(load(dir.path(), false, fetch).is_ok()); // corrupt cache is replaced
+    }
+
+    #[test]
+    fn a_missing_cache_counts_as_stale_and_a_fresh_one_does_not() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(cache_older_than(dir.path(), 60));
+        std::fs::write(dir.path().join(CACHE_FILE), "{}").unwrap();
+        assert!(!cache_older_than(dir.path(), 60));
     }
 }

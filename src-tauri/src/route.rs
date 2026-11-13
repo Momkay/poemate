@@ -182,6 +182,7 @@ impl Route {
     }
 
     /// Steps of one act that apply for the given flags (league start, bandit, ...).
+    #[cfg(test)]
     pub fn act_steps<'a>(&'a self, act: u32, flags: &'a HashSet<String>) -> impl Iterator<Item = &'a Step> {
         self.steps.iter().filter(move |s| s.act == act && s.applies(flags))
     }
