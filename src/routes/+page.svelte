@@ -200,7 +200,10 @@
       <section class="card">
         <header><span class="eyebrow">{t("act", { n: route.act })}</span><span class="badge">{route.index + 1} / {route.total}</span></header>
         <div class="bar"><i style:width="{((route.index + 1) / route.total) * 100}%"></i></div>
-        <h1>{route.step}</h1>
+        {#key route.index}<h1 class="step">{route.step}</h1>{/key}
+        {#if snap?.state.town && route.rewards.length}
+          <span class="chip town">{t("townTasks", { n: route.rewards.length })}</span>
+        {/if}
         {#if route.label}<p class="label">{route.label}</p>{/if}
         {#each route.hints as h}<p class="hint-line">{h}</p>{/each}
         {#if route.passive_points > 0}
@@ -212,7 +215,7 @@
             <span class="rtxt"><b>{r.gem}</b><span>{r.how === "Take" ? t("take") : t("buy")} · {r.npc}</span></span>
           </p>
         {/each}
-        {#each route.next as n}<p class="next">{n}</p>{/each}
+        {#each route.next as n, i}<p class="next" style:opacity={1 - i * 0.25}>{n}</p>{/each}
       </section>
       </Widget>
     {/if}
@@ -782,6 +785,27 @@
     padding: 2px 8px;
     font-size: 12px;
   }
+  .step {
+    animation: tick 0.45s ease-out;
+  }
+  .chip.town {
+    display: inline-block;
+    margin-top: 6px;
+    background: var(--yellow);
+    color: #1e1f22;
+    font-weight: 700;
+  }
+  @keyframes tick {
+    0% {
+      opacity: 0;
+      transform: translateX(-8px);
+      color: var(--green);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
   .toasts {
     position: absolute;
     top: 52px;
@@ -907,7 +931,8 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .card,
-    .toast {
+    .toast,
+    .step {
       animation: none;
     }
     .bar i {
