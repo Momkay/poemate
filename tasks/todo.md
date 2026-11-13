@@ -81,7 +81,7 @@ Commands assumed: `cargo test`, `npm run build`, `npm run tauri dev`.
 - [ ] **Checkpoint 5** — full-session manual playtest (campaign act 1-3), contrast on varied backgrounds, human review.
 
 ## Phase 7 — Hardening & release
-- [ ] **T29 Performance pass (S)** — Measure cold start, import time, event->UI latency, idle CPU/RAM, FPS impact; results in `docs/PERF.md`; fix regressions.
+- [ ] **T29 Performance pass (S)** (started 2026-11-13: cold start, idle CPU and RAM measured in `docs/PERF.md`; import time, event latency and FPS impact still open) — Measure cold start, import time, event->UI latency, idle CPU/RAM, FPS impact; results in `docs/PERF.md`; fix regressions.
   - AC: budgets from PROMPT §6 met or documented exceptions. Deps: Checkpoint 5.
 - [x] **T30 Security pass (S)** (done 2026-11-13, reviewed rather than changed: CSP is set (self + ipc only); the window capability is only core:default, the hotkey plugin is used from Rust and has no webview permission; PoB code capped at 2 MB, inflated XML at 32 MB, downloads at 2 MB and 10 s, no redirects, only pobb.in/pastebin.com URLs built from a validated id; no DTD/entities in XML; layout.json and hotkeys.json values are validated; no chat is stored or logged. New: a mutation test (300 corrupted copies of a real build never panic). Dependency audit run later: `cargo audit` and `npm audit` found no vulnerabilities (2 warnings in the Linux-only GTK stack). NOT done: a real cargo-fuzz run and checking the release build CSP) — CSP, minimal Tauri capabilities, fuzz PoB decode/parse, size/timeout caps, no secrets/chat in logs.
   - AC: fuzz run without panics; capability list reviewed. Deps: Checkpoint 5.

@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::plan::{Plan, Stage};
+use crate::plan::Plan;
 use crate::pob_model::{Gem, GemGroup};
 use crate::tree::{Kind, TreeData};
 
@@ -144,6 +144,7 @@ pub fn diff(plan: &Plan, stage: usize, have: &Synced) -> Diff {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan::Stage;
     use crate::tree::Step;
 
     fn step(id: u32) -> Step {
