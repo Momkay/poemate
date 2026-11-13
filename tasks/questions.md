@@ -20,7 +20,7 @@ Start with `npm run tauri dev` while PoE runs (Windowed/Borderless). Your Ranger
 ## Decisions needed
 1. **Stages without a level in their title** (e.g. "5) Pconc of Bouncing Swap", "6) ENDGAME SETUP") are never picked by level. For now Ctrl+Shift+↑/↓ switches stage manually. Better idea: a level you set per stage, or "switch at level N" in settings?
 2. **Passive tree data is only available for the latest tree version** (GGG's export). Builds on older versions resolve against the latest tree; changed nodes may be named wrong. Warning in the UI enough, or bundle PoB's per-version tree data (bigger, license check)?
-3. **Hotkeys**: rebinding exists now (T27). Any default you want different? The tray menu and the footer still name the defaults.
+3. **Hotkeys**: rebinding exists now (T27). Any default you want different? The tray menu text now follows the bindings (check it after rebinding).
 4. **Dev behaviour when PoE isn't running**: overlay covers the primary monitor and stays visible. Fine, or hide when the game is absent?
 5. **Flowbite Svelte** for the settings/onboarding window only (not the overlay): OK? Needs Tailwind.
 6. **Route variant**: now a setting, "Quests" in edit mode: *Essential* (default: the route for passive points and gems) or *Everything* (441 against 480 steps: the extra side quests and detours such as the Tidal Island / Medicine Chest). Both give the same passive points. Is that the split you meant, or do you want a third mode without gem quests (not built: nearly every quest in the route gives a gem or a point, filtering them hid only 2 of 441 steps)?

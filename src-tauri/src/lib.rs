@@ -24,6 +24,19 @@ mod tailer;
 mod tree;
 mod watcher;
 
+/// The tray entries that name a hotkey: their text follows the bindings.
+struct TrayLabels {
+    edit: MenuItem<tauri::Wry>,
+    hide: MenuItem<tauri::Wry>,
+}
+
+fn update_tray(app: &tauri::AppHandle, map: &std::collections::BTreeMap<&'static str, String>) {
+    if let Some(t) = app.try_state::<TrayLabels>() {
+        let _ = t.edit.set_text(format!("Toggle edit mode ({})", hotkeys::pretty(&map["edit"])));
+        let _ = t.hide.set_text(format!("Hide / show overlay ({})", hotkeys::pretty(&map["hide"])));
+    }
+}
+
 static EDIT: AtomicBool = AtomicBool::new(false);
 static HIDDEN: AtomicBool = AtomicBool::new(false);
 
@@ -91,6 +104,7 @@ fn hotkeys_set(app: tauri::AppHandle, id: String, keys: String) -> Result<Vec<ho
     map.insert(slot.0, keys);
     hotkeys::save(&dir, &map).map_err(|e| e.to_string())?;
     hotkeys::set_bound(map.iter().filter_map(|(k, v)| Some((*k, v.parse().ok()?))).collect());
+    update_tray(&app, &map);
     Ok(hotkeys::view(&map))
 }
 
@@ -223,8 +237,10 @@ pub fn run() {
             }
             hotkeys::set_bound(bound);
 
-            let edit = MenuItem::with_id(app, "edit", "Toggle edit mode (Ctrl+Shift+O)", true, None::<&str>)?;
-            let hide = MenuItem::with_id(app, "hide", "Hide / show overlay (Ctrl+Shift+H)", true, None::<&str>)?;
+            let edit = MenuItem::with_id(app, "edit", "Toggle edit mode", true, None::<&str>)?;
+            let hide = MenuItem::with_id(app, "hide", "Hide / show overlay", true, None::<&str>)?;
+            app.manage(TrayLabels { edit: edit.clone(), hide: hide.clone() });
+            update_tray(app.handle(), &hotkeys::load(&app.path().app_config_dir().unwrap_or_default()));
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().expect("window icon").clone())

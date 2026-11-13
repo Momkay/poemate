@@ -75,6 +75,11 @@ pub fn check(others: &BTreeMap<&'static str, String>, keys: &str) -> Result<Shor
     Ok(sc)
 }
 
+/// "Ctrl+Shift+KeyO" -> "Ctrl+Shift+O": the text people expect in a menu.
+pub fn pretty(keys: &str) -> String {
+    keys.replace("Key", "").replace("Digit", "").replace("Arrow", "")
+}
+
 pub fn set_bound(list: Vec<(&'static str, Shortcut)>) {
     *BOUND.lock().unwrap() = list;
 }
@@ -125,6 +130,13 @@ mod tests {
         save(&dir, &m).unwrap();
         assert_eq!(load(&dir), m);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn menu_text_drops_the_code_prefixes() {
+        assert_eq!(pretty("Ctrl+Shift+KeyO"), "Ctrl+Shift+O");
+        assert_eq!(pretty("Ctrl+Alt+ArrowRight"), "Ctrl+Alt+Right");
+        assert_eq!(pretty("Ctrl+Digit5"), "Ctrl+5");
     }
 
     #[test]
