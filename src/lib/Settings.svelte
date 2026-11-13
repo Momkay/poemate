@@ -269,6 +269,12 @@
         <span>{t("aboutVersion", { v: version || "–" })}</span>
       </div>
       <p class="help">{t("aboutData")}</p>
+      <p class="help"><b>{t("creditsTitle")}</b></p>
+      <ul class="help">
+        <li>exile-leveling (github.com/HeartofPhos/exile-leveling): {t("creditExile")}</li>
+        <li>skilltree-export (github.com/grindinggear/skilltree-export): {t("creditTree")}</li>
+        <li>Path of Building (github.com/PathOfBuildingCommunity/PathOfBuilding): {t("creditPob")}</li>
+      </ul>
       <p class="help">{t("disclaimer")}</p>
     {/if}
   </div>

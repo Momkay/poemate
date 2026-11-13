@@ -65,6 +65,18 @@ The docs page also states "We are currently unable to process new applications",
 4. Panic hotkey hides the overlay instantly (T3).
 5. No GGG logos/branding presented as official.
 
+## Third-party data and credits
+Shown in Settings > About. Licenses checked on GitHub 2026-11-13.
+
+| Source | License | Used for |
+|---|---|---|
+| [exile-leveling](https://github.com/HeartofPhos/exile-leveling) (HeartofPhos) | MIT | route, quest and gem data in `data/` |
+| [skilltree-export](https://github.com/grindinggear/skilltree-export) (GGG) | none stated; GGG's own public export | passive tree data, fetched on user action |
+| [Path of Building](https://github.com/PathOfBuildingCommunity/PathOfBuilding) | custom license file, not read yet | we only parse the build import format; no PoB code or data bundled |
+| PoE wiki | CC BY-NC-SA | quest passive points |
+
+Looked at and **not used**: poe-vendor-string (AGPL-3.0: copying it would make PoeMate AGPL), poe2.re (no license, PoE2), Path of Building PoE2 (PoE2), Exile-UI Act-Decoder images (code is MIT, but the zone images may be GGG material: check per file before bundling).
+
 ## Plan changes caused by this review
 - T10: clipboard auto-sniffing removed; replaced by a "Import from clipboard" hotkey/button (one read per press).
 - PROMPT.md §0 and §2 updated accordingly.
