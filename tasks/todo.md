@@ -100,5 +100,21 @@ Commands assumed: `cargo test`, `npm run build`, `npm run tauri dev`.
 - [x] **Remove build** — a button in edit mode returns to the plain campaign route (deletes the saved build, bandit falls back to kill all, the route position stays).
 - [x] **Open items from this round** (done 2026-11-13, 89 tests + svelte-check clean, NOT seen live) — vendor recipes of the current act and the bandit choice in the route card while in town (the choice is a dropdown only in edit mode, since clicks pass through otherwise); a ± points correction in the Route settings; a Browse button for Client.txt (tauri-plugin-dialog; check the dialog is not hidden behind the overlay).
 
+## Phase 8 — Live character sync (GGG OAuth, planned 2026-11-13, nothing built)
+Why this route: the official API is the only supported way to read a character; POESESSID is rejected (gives near-full account access, not officially supported). Confirmed from the developer docs: `GET /character/<name>` (scope `account:characters`) returns `equipment`, `jewels`, `passives.hashes/hashes_ex/mastery_effects/jewel_data/bandit_choice/pantheon_*`; items carry `sockets` + `socketedItems` (gems). Desktop apps are public clients: Authorization Code + PKCE (S256), redirect `http://127.0.0.1:<port>/callback`, access token 10 h, refresh token 7 days (cannot be extended), rate limit shared with all public clients, User-Agent `OAuth {clientId}/{version} (contact: {contact})`.
+**Blocker:** the docs say "We are currently unable to process new applications"; no intake address is published. Everything below ships behind a `character_sync` flag that stays off until a client ID exists. Check https://www.pathofexile.com/my-account/applications while signed in.
+
+- [ ] **T32 Apply for a client ID (XS, human)** — Sign in, open Manage applications, see if registration is open; if not, find GGG's current contact route (forum/Discord) and ask for a public client with `account:characters`. Record the answer in `docs/COMPLIANCE.md`.
+  - AC: client ID in hand or a dated note why not. Deps: none. Everything after this stays flagged off until then.
+- [x] **T33 Character model from API JSON (M)** (done 2026-11-13, `character_api.rs`, 2 tests on a hand-written fixture, 91 tests green; not wired to anything yet. Left for T36: resolving the hashes against `tree.rs` and diffing against the plan) — `character_api.rs`: serde structs for the fields above, mapped onto the existing plan types (allocated hashes -> tree nodes via `tree.rs`, `socketedItems` -> gem names via `rewards.rs` tables). Built and tested from a saved sample response, no network.
+  - AC: unit tests on a fixture of the Ranger; unknown hashes do not panic. Deps: T12.
+- [ ] **T34 OAuth PKCE login (M)** — `oauth.rs`: S256 challenge, loopback listener on 127.0.0.1 (one request, 30 s code window, state check), token exchange, refresh before the 7-day limit, tokens in the Windows credential store (never in a file or log), "Log out" revokes.
+  - AC: login/refresh/logout against a mock server in tests; no token in logs. Deps: T32, T33 not needed.
+- [ ] **T35 Fetch with rate-limit discipline (S)** — one manual "Sync" button (and optional slow poll >= 60 s while the game is running); parse `X-Rate-Limit-*` and `Retry-After`; stop on any 4xx (invalid requests are penalised); User-Agent in GGG's format; PoE1 realm only.
+  - AC: tests with canned headers; never retries 401/403 blindly. Deps: T33, T34.
+- [ ] **T36 Plan vs character in the UI (M)** — passive panel marks nodes you actually have vs the plan, gem card shows "linked / missing / wrong socket group", points budget uses the real count; Settings gets a Character sync tab (flag, login state, last sync, privacy text). Falls back to the manual plan when logged out.
+  - AC: shows a diff for the Ranger fixture; works with sync off. Deps: T33, T35.
+- [ ] **Checkpoint 7** — with a real client ID: log in, sync, diff matches the in-game tree; compliance text and credits updated; human sign-off.
+
 ## Parallelizable
 After T2: T5-T8 (log) and T9-T12 (PoB) are independent. T19 (route data) can run alongside Phase 6. T22-T26 widgets are independent once T20 exists.

@@ -6,6 +6,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
+mod character_api;
 mod events;
 mod hotkeys;
 mod layout;

@@ -65,6 +65,9 @@ The docs page also states "We are currently unable to process new applications",
 4. Panic hotkey hides the overlay instantly (T3).
 5. No GGG logos/branding presented as official.
 
+## Character sync (planned, T32-T36)
+Read 2026-11-13 from the developer docs reference and authorization pages. Only the official API with a **public OAuth client** (Authorization Code + PKCE, loopback redirect, scope `account:characters`) is allowed in our design. The `POESESSID` cookie is **rejected**: it gives near-full account access and GGG asks users not to share it. Registration is currently closed ("We are currently unable to process new applications"), so the feature stays behind a flag until a client ID exists. If built: User-Agent `OAuth {clientId}/{version} (contact: {contact})`, follow `X-Rate-Limit-*`, no retries on 4xx, tokens only in the Windows credential store, user told what is read.
+
 ## Third-party data and credits
 Shown in Settings > About. Licenses checked on GitHub 2026-11-13.
 
