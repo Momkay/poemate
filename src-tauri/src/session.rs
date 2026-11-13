@@ -14,13 +14,14 @@ use crate::pob_source;
 use crate::points;
 use crate::rewards;
 use crate::route::{Kind, Part, Route};
-use crate::route_engine::{flags_for, Engine, Progress};
+use crate::route_engine::{convert_cursor, flags_for, Engine, Progress};
 use crate::tree;
 
 pub static ROUTE: LazyLock<Route> = LazyLock::new(|| Route::load().expect("bundled route is valid"));
 static SESSION: LazyLock<Mutex<Session>> = LazyLock::new(|| Mutex::new(Session::default()));
 
 const BUILD_FILE: &str = "build.txt";
+const LEAGUE_FLAG: &str = "LEAGUE_START";
 const MAX_PASSIVES_SHOWN: usize = 40;
 const NOTES_MAX: usize = 3000;
 
@@ -42,6 +43,9 @@ struct Session {
 struct Saved {
     cursor: usize,
     stage_override: Option<usize>,
+    /// the route variant `cursor` counts in: the route with the extra side quests has other indexes
+    #[serde(default)]
+    league_start: bool,
 }
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -138,7 +142,7 @@ impl Session {
     fn save_progress(&self) {
         let Some(c) = &self.character else { return };
         let path = self.progress_path(c);
-        let saved = Saved { cursor: self.cursor, stage_override: self.stage_override };
+        let saved = Saved { cursor: self.cursor, stage_override: self.stage_override, league_start: self.league_start };
         let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
         let tmp = path.with_extension("tmp");
         if serde_json::to_vec(&saved).ok().and_then(|b| std::fs::write(&tmp, b).ok()).is_some() {
@@ -148,6 +152,18 @@ impl Session {
 
     fn load_progress(&self, character: &str) -> Option<Saved> {
         serde_json::from_slice(&std::fs::read(self.progress_path(character)).ok()?).ok()
+    }
+
+    /// Takes a saved position, converting the cursor when it was saved in the other route variant.
+    fn adopt(&mut self, s: Saved) {
+        let mut from = self.flags.clone();
+        if s.league_start {
+            from.insert(LEAGUE_FLAG.into());
+        } else {
+            from.remove(LEAGUE_FLAG);
+        }
+        self.cursor = convert_cursor(&ROUTE, s.cursor, &from, &self.flags);
+        self.stage_override = s.stage_override;
     }
 
     fn engine(&self) -> Engine<'static> {
@@ -166,7 +182,7 @@ impl Session {
             Event::CharacterDetected { name, .. } => {
                 self.character = Some(name.clone());
                 match self.load_progress(name) {
-                    Some(s) => (self.cursor, self.stage_override) = (s.cursor, s.stage_override),
+                    Some(s) => self.adopt(s),
                     None => self.save_progress(), // first time we see this character: keep the position so far
                 }
             }
@@ -295,7 +311,26 @@ impl Session {
 }
 
 pub fn init(cfg: PathBuf) {
-    SESSION.lock().unwrap().cfg = cfg;
+    let mut s = SESSION.lock().unwrap();
+    s.league_start = crate::layout::load(&cfg).settings.quests == "all";
+    s.cfg = cfg;
+}
+
+/// Switch between the essential route and the one with every extra side quest; the cursor stays on the same step.
+pub fn set_all_quests(on: bool) {
+    let mut s = SESSION.lock().unwrap();
+    if s.league_start == on {
+        return;
+    }
+    let from = s.flags.clone();
+    s.league_start = on;
+    if on {
+        s.flags.insert(LEAGUE_FLAG.into());
+    } else {
+        s.flags.remove(LEAGUE_FLAG);
+    }
+    s.cursor = convert_cursor(&ROUTE, s.cursor, &from, &s.flags);
+    s.save_progress();
 }
 
 pub fn views(state: &State) -> Views {
@@ -316,7 +351,7 @@ pub fn sync_to_current_area(state: &State) {
     if let Some(c) = state.character.clone() {
         s.character = Some(c.clone());
         if let Some(saved) = s.load_progress(&c) {
-            (s.cursor, s.stage_override) = (saved.cursor, saved.stage_override);
+            s.adopt(saved);
             return;
         }
     }

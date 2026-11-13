@@ -1,14 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type Pos = { x: number; y: number; scale: number };
-export type Settings = { opacity: number; density: "cozy" | "compact"; lang: "en" | "nl"; onboarded: boolean };
+export type Settings = { opacity: number; density: "cozy" | "compact"; lang: "en" | "nl"; onboarded: boolean; quests: "essential" | "all" };
 
 export const GRID = 8;
 const EDGE = 12;
 
 /** Positions are kept per overlay size, so a different resolution or window size has its own layout. */
 export const layout = $state({
-  settings: { opacity: 0.72, density: "cozy", lang: "en", onboarded: false } as Settings,
+  settings: { opacity: 0.72, density: "cozy", lang: "en", onboarded: false, quests: "essential" } as Settings,
   all: {} as Record<string, Record<string, Pos>>,
   key: "",
 });

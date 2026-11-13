@@ -95,6 +95,12 @@ fn hotkeys_set(app: tauri::AppHandle, id: String, keys: String) -> Result<Vec<ho
 }
 
 #[tauri::command]
+fn quest_mode(app: tauri::AppHandle, all_quests: bool) {
+    session::set_all_quests(all_quests);
+    watcher::refresh(&app);
+}
+
+#[tauri::command]
 fn route_step(app: tauri::AppHandle, delta: i32) {
     session::step(delta);
     watcher::refresh(&app);
@@ -224,7 +230,7 @@ pub fn run() {
             watcher::spawn(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, hotkeys_get, hotkeys_set, layout_load, layout_save])
+        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, quest_mode, hotkeys_get, hotkeys_set, layout_load, layout_save])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

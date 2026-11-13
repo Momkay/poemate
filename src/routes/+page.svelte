@@ -131,6 +131,11 @@
     layout.settings.lang = l;
     saveSoon();
   };
+  const setQuests = (q: "essential" | "all") => {
+    layout.settings.quests = q;
+    saveSoon();
+    invoke("quest_mode", { allQuests: q === "all" });
+  };
   const finish = () => {
     layout.settings.onboarded = true;
     saveSoon();
@@ -359,6 +364,13 @@
           <button onclick={resetLayout}>{t("resetLayout")}</button>
         </div>
         <p class="hint">{t("dragHint")}</p>
+        <p class="langs">
+          <span class="eyebrow">{t("questsTitle")}</span>
+          {#each ["essential", "all"] as const as q}
+            <button class:on={layout.settings.quests === q} onclick={() => setQuests(q)}>{q === "all" ? t("questsAll") : t("questsEssential")}</button>
+          {/each}
+        </p>
+        <p class="hint">{t("questsHint")}</p>
         <p class="langs">
           <span class="eyebrow">{t("language")}</span>
           {#each ["en", "nl"] as const as l}<button class:on={layout.settings.lang === l} onclick={() => setLang(l)}>{l.toUpperCase()}</button>{/each}

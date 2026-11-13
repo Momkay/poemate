@@ -93,6 +93,7 @@ impl Step {
     pub fn applies(&self, flags: &HashSet<String>) -> bool {
         self.conditions.iter().all(|(f, want)| flags.contains(f) == *want)
     }
+
 }
 
 #[derive(Debug, PartialEq, Eq)]

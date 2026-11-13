@@ -49,6 +49,10 @@ const en = {
   disclaimer:
     "This product isn't affiliated with or endorsed by Grinding Gear Games in any way. It only reads Client.txt and never sends input to the game.",
   language: "Language",
+  questsTitle: "Quests",
+  questsEssential: "Essential",
+  questsAll: "Everything",
+  questsHint: "Essential: the route for passive points and gems. Everything: also the extra side quests and detours.",
   welcome: "Welcome to PoeMate",
   wizLog: "Game log (Client.txt) found",
   wizWindow: "Path of Exile window found (Windowed or Borderless)",
@@ -112,6 +116,10 @@ const nl: typeof en = {
   disclaimer:
     "Dit product is op geen enkele manier verbonden aan of goedgekeurd door Grinding Gear Games. Het leest alleen Client.txt en stuurt nooit invoer naar de game.",
   language: "Taal",
+  questsTitle: "Quests",
+  questsEssential: "Alleen het nodige",
+  questsAll: "Alles",
+  questsHint: "Alleen het nodige: de route voor passieve punten en gems. Alles: ook de extra zijquests en omwegen.",
   welcome: "Welkom bij PoeMate",
   wizLog: "Gamelog (Client.txt) gevonden",
   wizWindow: "Path of Exile-venster gevonden (Windowed of Borderless)",

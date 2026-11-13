@@ -25,11 +25,13 @@ pub struct Settings {
     pub lang: String,
     /// the first-run setup card was finished
     pub onboarded: bool,
+    /// "essential" = the route for passive points and gems, "all" = plus every extra side quest and detour
+    pub quests: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false }
+        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false, quests: "essential".into() }
     }
 }
 
@@ -51,6 +53,9 @@ impl Layout {
         self.settings.opacity = clamp(self.settings.opacity, 0.2, 1.0);
         if !["cozy", "compact"].contains(&self.settings.density.as_str()) {
             self.settings.density = "cozy".into();
+        }
+        if !["essential", "all"].contains(&self.settings.quests.as_str()) {
+            self.settings.quests = "essential".into();
         }
         if !["en", "nl"].contains(&self.settings.lang.as_str()) {
             self.settings.lang = "en".into();

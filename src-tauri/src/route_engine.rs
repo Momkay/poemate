@@ -87,6 +87,12 @@ impl<'a> Engine<'a> {
     }
 }
 
+/// Where a cursor lands when the same route is walked with other flags (the step it was on, or the next one that still applies).
+pub fn convert_cursor(route: &Route, cursor: usize, from: &HashSet<String>, to: &HashSet<String>) -> usize {
+    let Some(at) = route.steps.iter().enumerate().filter(|(_, s)| s.applies(from)).nth(cursor).map(|(i, _)| i) else { return 0 };
+    route.steps.iter().enumerate().filter(|(_, s)| s.applies(to)).position(|(i, _)| i >= at).unwrap_or(0)
+}
+
 /// Route flags from the build and the user's playstyle.
 pub fn flags_for(bandit: &str, league_start: bool) -> HashSet<String> {
     let mut f = HashSet::new();
@@ -191,5 +197,35 @@ mod tests {
         assert!(flags_for("Alira", false).contains("BANDIT_ALIRA"));
         assert!(flags_for("Kraityn", true).contains("LEAGUE_START"));
         assert!(flags_for("None", false).contains("BANDIT_KILL"));
+    }
+
+    #[test]
+    fn the_everything_route_adds_side_quests_but_never_changes_the_passive_points() {
+        let r = route();
+        let (lean, full) = (flags_for("None", false), flags_for("None", true));
+        let (l, f) = (Engine::new(&r, &lean, Progress::default()), Engine::new(&r, &full, Progress::default()));
+        assert!(l.len() < f.len(), "{} vs {}", l.len(), f.len());
+        let end = Progress { cursor: usize::MAX };
+        let total = |fl: &HashSet<String>| crate::points::earned(Engine::new(&r, fl, end.clone()).done(), fl);
+        assert_eq!(total(&lean), total(&full));
+    }
+
+    #[test]
+    fn the_cursor_stays_on_its_step_when_the_route_variant_changes() {
+        let r = route();
+        let (lean, full) = (flags_for("None", false), flags_for("None", true));
+        let steps_lean: Vec<_> = r.steps.iter().filter(|s| s.applies(&lean)).collect();
+        let steps_full: Vec<_> = r.steps.iter().filter(|s| s.applies(&full)).collect();
+        for c in 0..steps_lean.len() {
+            let to = convert_cursor(&r, c, &lean, &full);
+            if steps_lean[c].applies(&full) {
+                assert!(std::ptr::eq(steps_full[to], steps_lean[c]), "lean step {c} moved");
+            }
+            assert!(steps_full[to].act >= steps_lean[c].act, "lean step {c} went back an act");
+        }
+        for c in 0..steps_full.len() {
+            let to = convert_cursor(&r, c, &full, &lean);
+            assert!(steps_lean[to].act >= steps_full[c].act, "full step {c} went back an act");
+        }
     }
 }
