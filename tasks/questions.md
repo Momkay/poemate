@@ -32,6 +32,7 @@ Start with `npm run tauri dev` while PoE runs (Windowed/Borderless). Your Ranger
 - Settings block (bottom right): Quests (Essential / Everything), Bandits, Language, Hotkeys. Switch Quests or Bandits mid-act: the route should stay on the same step. Do they survive a restart?
 - Hotkeys list: click a key, press a new combination; a taken or bare key is refused with a message; swap two keys and restart: both should stay.
 - Play without importing a build: the route card, the level and the zone should work on their own (act 2 shows the bandit steps, "kill all" by default).
+- Remove build (edit box, only visible with a build loaded): the passive, gem and gear cards should disappear, the route position stay, and the build stay gone after a restart. Import it again to get it back.
 - Client.txt picker: only appears when the log can't be found. To try: temporarily rename `Client.txt`, paste the path in edit mode, rename it back (the app finds it within 5 seconds).
 - Route card now reads "Act 1 · 3 / 40" (position inside the act). Level-up toast. First-run "Welcome" card (you will see it once, press Done).
 - Ctrl+Shift+T panel: mini tree, build notes card. Gear card: click an item, paste in the stash search.
