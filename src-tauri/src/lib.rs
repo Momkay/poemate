@@ -4,9 +4,10 @@ use std::time::Duration;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 mod events;
+mod hotkeys;
 mod layout;
 mod locator;
 mod poe_window;
@@ -69,6 +70,31 @@ fn layout_save(app: tauri::AppHandle, layout: layout::Layout) -> Result<(), Stri
 }
 
 #[tauri::command]
+fn hotkeys_get(app: tauri::AppHandle) -> Vec<hotkeys::Binding> {
+    hotkeys::view(&hotkeys::load(&app.path().app_config_dir().unwrap_or_default()))
+}
+
+#[tauri::command]
+fn hotkeys_set(app: tauri::AppHandle, id: String, keys: String) -> Result<Vec<hotkeys::Binding>, String> {
+    let dir = app.path().app_config_dir().unwrap_or_default();
+    let mut map = hotkeys::load(&dir);
+    let Some(slot) = hotkeys::ACTIONS.iter().find(|a| a.0 == id) else { return Err("Unknown action".into()) };
+    let others = map.iter().filter(|(k, _)| **k != slot.0).map(|(k, v)| (*k, v.clone())).collect();
+    let new = hotkeys::check(&others, &keys)?;
+    let gs = app.global_shortcut();
+    let old: Shortcut = map[slot.0].parse().map_err(|_| "Stored hotkey is invalid".to_string())?;
+    if new != old {
+        // the OS refuses keys another app owns; the old binding stays until this one is in
+        gs.register(new).map_err(|_| "Another app already uses that key".to_string())?;
+        let _ = gs.unregister(old);
+    }
+    map.insert(slot.0, keys);
+    hotkeys::save(&dir, &map).map_err(|e| e.to_string())?;
+    hotkeys::set_bound(map.iter().filter_map(|(k, v)| Some((*k, v.parse().ok()?))).collect());
+    Ok(hotkeys::view(&map))
+}
+
+#[tauri::command]
 fn route_step(app: tauri::AppHandle, delta: i32) {
     session::step(delta);
     watcher::refresh(&app);
@@ -125,13 +151,6 @@ fn spawn_tracker(w: WebviewWindow) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let edit_key = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyO);
-    let hide_key = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyH);
-    let cs = Some(Modifiers::CONTROL | Modifiers::SHIFT);
-    let (step_next, step_prev) = (Shortcut::new(cs, Code::ArrowRight), Shortcut::new(cs, Code::ArrowLeft));
-    let (stage_next, stage_prev) = (Shortcut::new(cs, Code::ArrowDown), Shortcut::new(cs, Code::ArrowUp));
-    let panel_key = Shortcut::new(cs, Code::KeyT);
-
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -139,29 +158,25 @@ pub fn run() {
                     if ev.state() != ShortcutState::Pressed {
                         return;
                     }
-                    // these only move our own route/stage cursor; nothing is sent to the game
-                    let delta = |a: Shortcut, b: Shortcut| if *sc == a { Some(1) } else if *sc == b { Some(-1) } else { None };
-                    if let Some(d) = delta(step_next, step_prev) {
-                        session::step(d);
-                        watcher::refresh(app);
-                        return;
+                    // the step/stage/panel keys only move our own UI; nothing is sent to the game
+                    match hotkeys::action_of(sc) {
+                        Some("step_next") => session::step(1),
+                        Some("step_prev") => session::step(-1),
+                        Some("stage_next") => session::stage(1, watcher::current_level()),
+                        Some("stage_prev") => session::stage(-1, watcher::current_level()),
+                        Some("panel") => {
+                            let _ = app.emit("passive-panel", ());
+                            return;
+                        }
+                        Some(id @ ("edit" | "hide")) => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                if id == "edit" { toggle_edit(&w) } else { toggle_hidden(&w) }
+                            }
+                            return;
+                        }
+                        _ => return,
                     }
-                    if let Some(d) = delta(stage_next, stage_prev) {
-                        session::stage(d, watcher::current_level());
-                        watcher::refresh(app);
-                        return;
-                    }
-                    if *sc == panel_key {
-                        // only our own UI listens: the big passive panel next to the game's tree
-                        let _ = app.emit("passive-panel", ());
-                        return;
-                    }
-                    let Some(w) = app.get_webview_window("main") else { return };
-                    if *sc == edit_key {
-                        toggle_edit(&w);
-                    } else if *sc == hide_key {
-                        toggle_hidden(&w);
-                    }
+                    watcher::refresh(app);
                 })
                 .build(),
         )
@@ -173,11 +188,15 @@ pub fn run() {
                 let _ = w.set_size(*m.size());
             }
             set_edit(&w, false);
-            app.global_shortcut().register(edit_key)?;
-            app.global_shortcut().register(hide_key)?;
-            for k in [step_next, step_prev, stage_next, stage_prev, panel_key] {
-                app.global_shortcut().register(k)?;
+            let mut bound = Vec::new();
+            for (id, keys) in hotkeys::load(&app.path().app_config_dir().unwrap_or_default()) {
+                let Ok(sc) = keys.parse::<Shortcut>() else { continue };
+                // a key another app owns just stays unbound; it can be changed in edit mode
+                if app.global_shortcut().register(sc).is_ok() {
+                    bound.push((id, sc));
+                }
             }
+            hotkeys::set_bound(bound);
 
             let edit = MenuItem::with_id(app, "edit", "Toggle edit mode (Ctrl+Shift+O)", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Hide / show overlay (Ctrl+Shift+H)", true, None::<&str>)?;
@@ -205,7 +224,7 @@ pub fn run() {
             watcher::spawn(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, layout_load, layout_save])
+        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, hotkeys_get, hotkeys_set, layout_load, layout_save])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

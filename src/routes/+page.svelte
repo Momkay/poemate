@@ -94,6 +94,27 @@
     if (lv) lastLevel = lv;
   });
 
+  type Binding = { id: string; label: string; keys: string };
+  let binds = $state<Binding[]>([]);
+  let capturing = $state("");
+  let bindMsg = $state("");
+  const pretty = (k: string) => k.replace(/Key|Digit|Arrow/g, "");
+
+  // turns a key press into the text the backend parses, e.g. "Ctrl+Shift+KeyO"
+  async function capture(e: KeyboardEvent, id: string) {
+    e.preventDefault();
+    if (e.key === "Escape") return void (capturing = "");
+    if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+    const keys = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.code].filter(Boolean).join("+");
+    try {
+      binds = await invoke<Binding[]>("hotkeys_set", { id, keys });
+      bindMsg = "";
+    } catch (err) {
+      bindMsg = String(err);
+    }
+    capturing = "";
+  }
+
   let copied = $state("");
   // write-only and only on a user click, so it stays within the GGG overlay rules
   async function copySearch(g: { slot: string; name: string; base: string }) {
@@ -121,6 +142,7 @@
 
   onMount(() => {
     loadLayout();
+    invoke<Binding[]>("hotkeys_get").then((b) => (binds = b));
     const onResize = () => (layout.key = sizeKey());
     window.addEventListener("resize", onResize);
     invoke<Snapshot>("snapshot").then((s) => (snap ??= s));
@@ -299,7 +321,22 @@
           <button onclick={resetLayout}>Reset layout</button>
         </div>
         <p class="hint">Drag cards to move · mouse wheel on a card to resize</p>
-        <p class="hint">Ctrl+Shift+←/→ step · ↑/↓ stage · O edit · H hide</p>
+        <details>
+          <summary class="eyebrow">Hotkeys</summary>
+          <ul class="list">
+            {#each binds as b}
+              <li>
+                <span class="slot">{b.label}</span>
+                <button class="key" onclick={() => (capturing = b.id)} onkeydown={(e) => capturing === b.id && capture(e, b.id)} onblur={() => (capturing = "")}>
+                  {capturing === b.id ? "Press keys…" : pretty(b.keys)}
+                </button>
+              </li>
+            {/each}
+          </ul>
+          {#if bindMsg}<p class="next warn">{bindMsg}</p>{/if}
+          <p class="hint">Click a key, then press the new combination (needs Ctrl, Alt or Shift). Esc cancels.</p>
+        </details>
+        <p class="hint">This product isn't affiliated with or endorsed by Grinding Gear Games in any way. It only reads Client.txt and never sends input to the game.</p>
       </section>
     {:else}
       <p class="foot">Ctrl+Shift+O edit · Ctrl+Shift+H hide</p>
@@ -686,6 +723,14 @@
     line-height: 1.4;
     white-space: pre-wrap;
     color: var(--text);
+  }
+  summary {
+    margin-top: 10px;
+    cursor: pointer;
+  }
+  button.key {
+    padding: 2px 8px;
+    font-size: 12px;
   }
   .toasts {
     position: absolute;
