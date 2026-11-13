@@ -21,7 +21,7 @@ Commands assumed: `cargo test`, `npm run build`, `npm run tauri dev`.
 - [ ] **Checkpoint 1** — builds clean; overlay verified over game/test window; CPU/RAM baseline noted in `docs/PERF.md`; review with human.
 
 ## Phase 2 — Client.txt heartbeat
-- [x] **T5 Client.txt locator (S)** (5 tests green; manual picker UI comes with T28, saved path via `locator::save`) — Registry, Steam libraries, running-process path, manual picker fallback; persisted setting.
+- [x] **T5 Client.txt locator (S)** (5 tests green; manual picker done in T28, saved path via `locator::save`) — Registry, Steam libraries, running-process path, manual picker fallback; persisted setting.
   - AC: returns path or typed "not found"; unit tests with fake directory trees. Verify: `cargo test locator`. Deps: T2.
 - [x] **T6 Log tailer (M)** (5 tests green; the polling thread and "pause when PoE not foreground" are wired in T8) — Shared-read, seek-to-end start, partial lines, truncation/rotation, BOM; emits lines via channel; paused when PoE not foreground.
   - AC: tests append/truncate/rotate a temp file and receive exactly the new complete lines. Verify: `cargo test tailer`. Deps: T5.
@@ -85,9 +85,19 @@ Commands assumed: `cargo test`, `npm run build`, `npm run tauri dev`.
   - AC: budgets from PROMPT §6 met or documented exceptions. Deps: Checkpoint 5.
 - [x] **T30 Security pass (S)** (done 2026-11-13, reviewed rather than changed: CSP is set (self + ipc only); the window capability is only core:default, the hotkey plugin is used from Rust and has no webview permission; PoB code capped at 2 MB, inflated XML at 32 MB, downloads at 2 MB and 10 s, no redirects, only pobb.in/pastebin.com URLs built from a validated id; no DTD/entities in XML; layout.json and hotkeys.json values are validated; no chat is stored or logged. New: a mutation test (300 corrupted copies of a real build never panic). NOT done: a real cargo-fuzz run, a dependency audit (cargo audit), and checking the release build CSP) — CSP, minimal Tauri capabilities, fuzz PoB decode/parse, size/timeout caps, no secrets/chat in logs.
   - AC: fuzz run without panics; capability list reviewed. Deps: Checkpoint 5.
-- [ ] **T31 Installer, README, compliance re-check (M)** — NSIS + portable zip, README with screenshots/GIFs, backlog list, re-read GGG policy and update `docs/COMPLIANCE.md`.
+- [ ] **T31 Installer, README, compliance re-check (M)** — also note the source and date of the bundled route/quest/gem data (Exile Leveling, PoE wiki) and how to refresh it; NSIS + portable zip, README with screenshots/GIFs, backlog list, re-read GGG policy and update `docs/COMPLIANCE.md`.
   - AC: clean-machine install runs; docs complete. Deps: T29, T30.
 - [ ] **Checkpoint 6 (Release)** — all ACs met, human sign-off.
+
+## Added after the plan (2026-11-13, all done, none played yet)
+- [x] **Restyles** — first a Discord-like look, then a chart-room blue-black look, then a minimal one: one block per card, shopping cards (gems, gear) only in town or in the panel, settings/hints/setup card bottom right above the mana orb.
+- [x] **Review fixes** — a manual stage survives a restart and the first zone change; swapped hotkeys survive a restart; the tree cache refreshes when a build has unknown nodes; the watcher builds views only when a log line arrives; dead code removed (85 tests).
+- [x] **Quests setting** — Essential (441 steps) or Everything (480 steps, the extra side quests); the cursor follows across the switch; saved positions remember the flags they were saved under.
+- [x] **Bandit setting** — from the build / kill all / Alira / Oak / Kraityn; works without a build (kill all).
+- [x] **Play without a build** — the route works on its own; the flags used to be empty, which dropped the bandit steps of acts 2 and 10.
+- [x] **Client.txt picker** — paste a path in edit mode when the log is not found; the watcher picks it up within 5 s.
+- [x] **Progress per act** — "Act 1 · 3 / 40" instead of the whole route.
+- [ ] **Still open from this round** — vendor recipes and the bandit choice in the town chip; "points spent" correction; a browse button for Client.txt.
 
 ## Parallelizable
 After T2: T5-T8 (log) and T9-T12 (PoB) are independent. T19 (route data) can run alongside Phase 6. T22-T26 widgets are independent once T20 exists.
