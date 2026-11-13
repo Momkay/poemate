@@ -81,7 +81,7 @@
   );
   // gems and gear are shopping lists: out in a zone they are clutter
   const shop = $derived((snap?.state.town ?? false) || panel || edit);
-  const COMPACT = 5;
+  const COMPACT = 3;
   const changedGear =$derived(plan?.gear.filter((g) => g.changed) ?? []);
 
   // level-up toasts: max 2 at once, 6 s each; the first level seen after start is not a level-up
@@ -201,26 +201,17 @@
     {#if route}
       <Widget id="route" {edit}>
       <section class="card">
-        <header><span class="eyebrow">{t("act", { n: route.act })}</span><span class="meta">{route.index + 1} / {route.total}</span></header>
-        <div class="bar"><i style:width="{((route.index + 1) / route.total) * 100}%"></i></div>
-        <div class="path">
+        <p class="where">{t("act", { n: route.act })} · {route.index + 1} / {route.total}</p>
         {#key route.index}<h1 class="step">{route.step}</h1>{/key}
-        {#if snap?.state.town && route.rewards.length}
-          <span class="chip town">{t("townTasks", { n: route.rewards.length })}</span>
-        {/if}
         {#if route.label}<p class="label">{route.label}</p>{/if}
-        {#each route.hints as h}<p class="hint-line">{h}</p>{/each}
+        {#each route.hints.slice(0, 1) as h}<p class="label">{h}</p>{/each}
         {#if route.passive_points > 0}
           <p class="points">{t(route.passive_points > 1 ? "passivePoints" : "passivePoint", { n: route.passive_points })}</p>
         {/if}
         {#each route.rewards as r}
-          <p class="reward">
-            <span class="mark {r.how === 'Take' ? 'take' : 'buy'}" aria-hidden="true">{r.how === "Take" ? "◆" : "◇"}</span>
-            <span class="rtxt"><b>{r.gem}</b><span>{r.how === "Take" ? t("take") : t("buy")} · {r.npc}</span></span>
-          </p>
+          <p class="reward"><b>{r.gem}</b><span>{r.how === "Take" ? t("take") : t("buy")} · {r.npc}</span></p>
         {/each}
-        {#each route.next as n, i}<p class="next hop" style:opacity={1 - i * 0.25}>{n}</p>{/each}
-        </div>
+        {#each route.next.slice(0, 1) as n}<p class="next">{n}</p>{/each}
       </section>
       </Widget>
     {/if}
@@ -251,7 +242,7 @@
             {#if crop.next}<circle cx={crop.next.x} cy={crop.next.y} r="52" class="ring" />{/if}
           </svg>
         {/if}
-        {#if plan.budget !== null}
+        {#if plan.budget !== null && panel}
           <p class="next">{t("pointsToSpend", { n: Math.max(0, plan.budget - plan.spent_before) })}</p>
         {/if}
         {#if plan.passives.length === 0}
@@ -262,12 +253,12 @@
             <li class={p.kind.toLowerCase()} class:locked={!p.available}>
               <span class="glyph">{GLYPH[p.kind]}</span>
               <span class="name">{p.name}</span>
-              {#if p.kind !== "Normal" && p.stats[0]}<span class="stat">{p.stats[0]}</span>{/if}
+              {#if panel && p.kind !== "Normal" && p.stats[0]}<span class="stat">{p.stats[0]}</span>{/if}
             </li>
           {/each}
         </ol>
         {#if !panel && plan.passives_total > COMPACT}<p class="next">{t("moreHint", { n: plan.passives_total - COMPACT, key: keyOf("panel") })}</p>{/if}
-        {#each plan.masteries as [name, stats]}
+        {#each panel ? plan.masteries : [] as [name, stats]}
           <p class="mastery">◇ {name}: {stats.join(" · ")}</p>
         {/each}
         {#if plan.auto_order}<p class="hint">{t("autoOrder")}</p>{/if}
@@ -281,14 +272,12 @@
             <span class="eyebrow">{t("gems")}</span>
             {#if plan.new_gems.length}<span class="meta gain">{t("newGems", { n: plan.new_gems.length })}</span>{/if}
           </header>
-          {#each links.slice(0, panel ? 12 : 5) as grp}
-            <div class="chips">
-              {#each grp as g}
-                <span class="chip" class:support={g.support} class:new={plan.new_gems.includes(g.name)}>{g.name}</span>
-              {/each}
-            </div>
+          {#each links.slice(0, panel ? 12 : 4) as grp}
+            <p class="grp">
+              {#each grp as g, i}<span class:support={g.support} class:new={plan.new_gems.includes(g.name)}>{g.name}</span>{i < grp.length - 1 ? " · " : ""}{/each}
+            </p>
           {/each}
-          {#if links.length > (panel ? 12 : 5)}<p class="next">{t("moreLinks", { n: links.length - (panel ? 12 : 5) })}</p>{/if}
+          {#if links.length > (panel ? 12 : 4)}<p class="next">{t("moreLinks", { n: links.length - (panel ? 12 : 4) })}</p>{/if}
         </section>
         </Widget>
       {/if}
@@ -306,7 +295,6 @@
               </li>
             {/each}
           </ul>
-          <p class="hint">{t("copyHint")}</p>
         </section>
         </Widget>
       {/if}
@@ -394,20 +382,20 @@
 </main>
 
 <style>
-  /* Waymarker look: warm ink surfaces stepped by tone, one ember accent that only marks "where you are now",
-     square-cut shapes and diamond waymarks borrowed from the passive tree; no blur, no pills, no avatars */
+  /* Chart-room look: blue-black ink stepped by tone, one sea-glass accent for "now" and "gain", a serif for titles
+     (the game's own face is a serif), soft corners, arrows for the route ahead; no blur, no pills, no avatars */
   :global(:root) {
-    --bg-0: 14, 12, 10;
-    --bg-1: 25, 22, 19;
-    --bg-2: 40, 35, 30;
-    --hover: #3a342d;
-    --text: #d9d2c5;
-    --strong: #f4efe4;
-    --muted: #9a9082;
-    --accent: #e2813b;
-    --green: #5fae8f;
-    --yellow: #d9a93c;
-    --red: #d65a3a;
+    --bg-0: 9, 14, 17;
+    --bg-1: 17, 26, 31;
+    --bg-2: 29, 42, 49;
+    --hover: #2c3d45;
+    --text: #d3e0e2;
+    --strong: #f1f8f8;
+    --muted: #7e969c;
+    --accent: #6fd3c0;
+    --green: #6fd3c0;
+    --yellow: #e3b657;
+    --red: #e8705a;
   }
   :global(html, body) {
     margin: 0;
@@ -450,8 +438,7 @@
     align-items: center;
     gap: 8px;
     padding: 4px 12px 4px 4px;
-    border-radius: 4px;
-    border-bottom: 2px solid var(--accent);
+    border-radius: 10px;
     font-size: 13px;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
@@ -464,9 +451,8 @@
     height: 24px;
     padding: 0 4px;
     box-sizing: border-box;
-    font-family: Bahnschrift, "Segoe UI Variable Display", sans-serif;
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--accent);
   }
   .alvl {
@@ -482,7 +468,7 @@
   }
   .card {
     padding: 12px;
-    border-radius: 4px;
+    border-radius: 10px;
     animation: in 0.16s ease-out;
   }
   .compact .card {
@@ -501,8 +487,7 @@
     gap: 8px;
   }
   .eyebrow {
-    font-family: Bahnschrift, "Segoe UI Variable Display", sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--muted);
   }
@@ -515,22 +500,8 @@
   .meta.gain {
     color: var(--green);
   }
-  .bar {
-    height: 4px;
-    margin-top: 8px;
-    border-radius: 2px;
-    background: rgb(var(--bg-2));
-    overflow: hidden;
-  }
-  .bar i {
-    display: block;
-    height: 100%;
-    border-radius: 2px;
-    background: var(--accent);
-    transition: width 0.25s ease-out;
-  }
   h1 {
-    margin: 10px 0 2px;
+    margin: 2px 0 2px;
     font-size: 17px;
     font-weight: 700;
     line-height: 1.25;
@@ -544,10 +515,7 @@
     color: var(--muted);
   }
   .hint-line {
-    margin-top: 4px;
-    padding: 5px 8px;
-    border-radius: 4px;
-    background: rgb(var(--bg-2));
+    margin-top: 6px;
     font-size: 13px;
   }
   .points {
@@ -559,80 +527,21 @@
   .locked {
     opacity: 0.55;
   }
-  .reward {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 6px;
-    padding: 4px 6px 4px 4px;
-    border-radius: 3px;
-    background: rgb(var(--bg-2));
-  }
-  .mark {
-    flex: none;
-    width: 20px;
-    text-align: center;
-    font-size: 15px;
-  }
-  .mark.take {
-    color: var(--green);
-  }
-  .mark.buy {
-    color: var(--muted);
-  }
-  /* the route as a path: the current step is a waymark, what follows hangs below it on the same line */
-  .path {
-    position: relative;
-    margin-top: 10px;
-    padding-left: 20px;
-  }
-  .path::before {
-    content: "";
-    position: absolute;
-    left: 5px;
-    top: 14px;
-    bottom: 6px;
-    width: 2px;
-    background: rgb(var(--bg-2));
-  }
-  .path h1 {
-    margin-top: 0;
-  }
-  .path h1::before,
-  .hop::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    width: 12px;
-    height: 12px;
-    transform: rotate(45deg) scale(0.75);
-  }
-  .path h1::before {
-    top: 5px;
-    background: var(--accent);
-  }
-  .hop {
-    position: relative;
-  }
-  .hop::before {
-    top: 3px;
-    border: 2px solid var(--muted);
-    box-sizing: border-box;
-    background: rgb(var(--bg-1));
-  }
-  .rtxt {
-    display: grid;
-    min-width: 0;
-    line-height: 1.25;
-  }
-  .rtxt b {
-    font-size: 13px;
+  .reward b {
+    font-size: 14px;
     color: var(--strong);
   }
-  .rtxt span {
+  .reward span {
     font-size: 12px;
     color: var(--muted);
   }
+  .reward {
+    display: grid;
+    gap: 1px;
+    margin-top: 10px;
+    line-height: 1.3;
+  }
+  /* the route as a trail: the current step is the title, the steps ahead follow behind arrows */
   .next {
     margin-top: 6px;
     font-size: 12px;
@@ -655,28 +564,21 @@
     border-radius: 4px;
   }
   .glyph {
-    display: grid;
-    place-items: center;
     flex: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    background: rgb(var(--bg-2));
-    font-size: 11px;
+    width: 14px;
+    font-size: 12px;
+    text-align: center;
     color: var(--muted);
   }
   .notable .glyph {
-    background: var(--yellow);
-    color: #1e1f22;
+    color: var(--yellow);
   }
   .keystone .glyph {
-    background: var(--red);
-    color: #fff;
+    color: var(--red);
   }
   .mastery .glyph,
   .jewel .glyph {
-    background: var(--accent);
-    color: #fff;
+    color: var(--accent);
   }
   .name {
     font-weight: 500;
@@ -709,19 +611,19 @@
     background: rgb(var(--bg-0));
   }
   .mini .l {
-    stroke: #3a3c41;
+    stroke: #25353c;
     stroke-width: 7;
   }
   .mini .l.now,
   .mini .l.later {
-    stroke: #6d6f78;
+    stroke: #5d7a84;
   }
   .mini .n {
-    fill: #4e5058;
+    fill: #3a4f58;
   }
   .mini .n.later {
     fill: none;
-    stroke: #6d6f78;
+    stroke: #5d7a84;
     stroke-width: 6;
   }
   .mini .n.now {
@@ -753,7 +655,7 @@
   }
   .counts span {
     padding: 1px 8px;
-    border-radius: 3px;
+    border-radius: 6px;
     background: rgb(var(--bg-2));
   }
   .counts .notable {
@@ -778,20 +680,6 @@
     font-weight: 700;
     text-transform: uppercase;
     color: var(--muted);
-  }
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
-  }
-  .chip {
-    padding: 2px 10px;
-    border-radius: 3px;
-    background: rgb(var(--bg-2));
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--strong);
   }
   .notes-body {
     max-height: 260px;
@@ -825,12 +713,23 @@
   .step {
     animation: tick 0.45s ease-out;
   }
-  .chip.town {
-    display: inline-block;
-    margin-top: 6px;
-    background: var(--yellow);
-    color: #1e1f22;
-    font-weight: 700;
+  .where {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .grp {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--strong);
+  }
+  .grp .support {
+    color: var(--muted);
+  }
+  .grp .new {
+    color: var(--accent);
+    font-weight: 600;
   }
   @keyframes tick {
     0% {
@@ -854,12 +753,12 @@
   }
   .toast {
     padding: 6px 14px;
-    border-radius: 4px;
+    border-radius: 10px;
     background: var(--accent);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     font-size: 13px;
     font-weight: 600;
-    color: #1a1612;
+    color: #0b1a1d;
     animation: in 0.16s ease-out;
   }
   button.copy {
@@ -876,17 +775,6 @@
   }
   .list li.copied {
     background: var(--green);
-  }
-  .chip.support {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px rgb(var(--bg-2));
-    font-weight: 400;
-    color: var(--muted);
-  }
-  .chip.new {
-    background: var(--green);
-    box-shadow: none;
-    color: #fff;
   }
   .hint,
   .foot {
@@ -938,8 +826,8 @@
   button {
     padding: 6px 12px;
     border: 0;
-    border-radius: 3px;
-    background: #4e5058;
+    border-radius: 6px;
+    background: #3a4f58;
     color: #fff;
     font: inherit;
     font-size: 13px;
@@ -948,13 +836,13 @@
     transition: background 0.1s;
   }
   button:hover:not(:disabled) {
-    background: #6d6f78;
+    background: #5d7a84;
   }
   .row button:first-child {
     background: var(--accent);
   }
   .row button:first-child:hover:not(:disabled) {
-    background: #c4682a;
+    background: #52b5a3;
   }
   button:disabled {
     opacity: 0.5;
@@ -971,9 +859,6 @@
     .toast,
     .step {
       animation: none;
-    }
-    .bar i {
-      transition: none;
     }
   }
 </style>
