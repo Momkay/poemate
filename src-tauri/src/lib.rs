@@ -130,6 +130,7 @@ pub fn run() {
     let cs = Some(Modifiers::CONTROL | Modifiers::SHIFT);
     let (step_next, step_prev) = (Shortcut::new(cs, Code::ArrowRight), Shortcut::new(cs, Code::ArrowLeft));
     let (stage_next, stage_prev) = (Shortcut::new(cs, Code::ArrowDown), Shortcut::new(cs, Code::ArrowUp));
+    let panel_key = Shortcut::new(cs, Code::KeyT);
 
     tauri::Builder::default()
         .plugin(
@@ -148,6 +149,11 @@ pub fn run() {
                     if let Some(d) = delta(stage_next, stage_prev) {
                         session::stage(d, watcher::current_level());
                         watcher::refresh(app);
+                        return;
+                    }
+                    if *sc == panel_key {
+                        // only our own UI listens: the big passive panel next to the game's tree
+                        let _ = app.emit("passive-panel", ());
                         return;
                     }
                     let Some(w) = app.get_webview_window("main") else { return };
@@ -169,7 +175,7 @@ pub fn run() {
             set_edit(&w, false);
             app.global_shortcut().register(edit_key)?;
             app.global_shortcut().register(hide_key)?;
-            for k in [step_next, step_prev, stage_next, stage_prev] {
+            for k in [step_next, step_prev, stage_next, stage_prev, panel_key] {
                 app.global_shortcut().register(k)?;
             }
 

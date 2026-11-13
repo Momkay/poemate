@@ -48,9 +48,15 @@
   let input = $state("");
   let importMsg = $state("");
   let busy = $state(false);
+  let panel = $state(false);
 
   const route = $derived(snap?.views.route ?? null);
   const plan = $derived(snap?.views.plan ?? null);
+  const kindCounts = $derived(
+    (["Notable", "Keystone", "Mastery", "Jewel"] as Kind[])
+      .map((k) => [k, plan?.passives.filter((p) => p.kind === k).length ?? 0] as const)
+      .filter(([, n]) => n > 0),
+  );
   const changedGear = $derived(plan?.gear.filter((g) => g.changed) ?? []);
 
   async function doImport() {
@@ -75,6 +81,7 @@
     invoke<Snapshot>("snapshot").then((s) => (snap ??= s));
     const un = [
       listen<boolean>("mode", (e) => (edit = e.payload)),
+      listen("passive-panel", () => (panel = !panel)),
       listen<boolean>("poe-found", (e) => (poeFound = e.payload)),
       listen<Snapshot>("snapshot", (e) => (snap = e.payload)),
     ];
@@ -123,11 +130,19 @@
 
     {#if plan}
       <Widget id="passive" {edit}>
-      <section class="card">
+      <section class="card" class:panel>
         <header>
           <span class="eyebrow">{plan.stage_title}{plan.manual ? " · manual" : ""}</span>
           <span class="badge">{plan.passives_available}/{plan.passives_total} now</span>
         </header>
+        {#if panel}
+          <p class="counts">
+            {#each kindCounts as [k, n]}<span class={k.toLowerCase()}>{GLYPH[k]} {n}</span>{/each}
+          </p>
+          <p class="stages">
+            {#each plan.stages as s, i}<span class:cur={i === plan.stage}>{s}</span>{/each}
+          </p>
+        {/if}
         {#if plan.budget !== null}
           <p class="next">≈ {Math.max(0, plan.budget - plan.spent_before)} points to spend (level − 1 + quests)</p>
         {/if}
@@ -135,7 +150,7 @@
           <p class="next">No new passives in this stage</p>
         {/if}
         <ol class="list">
-          {#each plan.passives.slice(0, 8) as p}
+          {#each panel ? plan.passives : plan.passives.slice(0, 8) as p}
             <li class={p.kind.toLowerCase()} class:locked={!p.available}>
               <span class="glyph">{GLYPH[p.kind]}</span>
               <span class="name">{p.name}</span>
@@ -143,7 +158,7 @@
             </li>
           {/each}
         </ol>
-        {#if plan.passives_total > 8}<p class="next">+{plan.passives_total - 8} more</p>{/if}
+        {#if !panel && plan.passives_total > 8}<p class="next">+{plan.passives_total - 8} more · Ctrl+Shift+T for all</p>{/if}
         {#each plan.masteries as [name, stats]}
           <p class="mastery">◇ {name}: {stats.join(" · ")}</p>
         {/each}
@@ -384,6 +399,36 @@
   }
   .keystone .glyph {
     color: #ff8f8f;
+    opacity: 1;
+  }
+  .card.panel {
+    width: 560px;
+  }
+  .panel .list {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 14px;
+  }
+  .counts,
+  .stages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 6px;
+    font-size: 12px;
+  }
+  .counts .notable {
+    color: #ffc27a;
+  }
+  .counts .keystone {
+    color: #ff8f8f;
+  }
+  .stages {
+    gap: 6px;
+    font-size: 10.5px;
+    opacity: 0.55;
+  }
+  .stages .cur {
+    color: #ffc27a;
     opacity: 1;
   }
   .mastery {
