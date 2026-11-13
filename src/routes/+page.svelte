@@ -141,6 +141,17 @@
     saveSoon();
     invoke("bandit_choice", { choice: layout.settings.bandit });
   };
+  let logPath = $state("");
+  let logMsg = $state("");
+  async function pickLog() {
+    try {
+      await invoke("set_log_path", { path: logPath });
+      logMsg = t("logPickSaved");
+      logPath = "";
+    } catch (e) {
+      logMsg = String(e);
+    }
+  }
   const finish = () => {
     layout.settings.onboarded = true;
     saveSoon();
@@ -329,6 +340,20 @@
 
   <!-- settings sit bottom right: the top left is where people keep their own panels -->
   <aside class="settings">
+    {#if snap?.log === "not-found"}
+      <section class="card editbox">
+        <header><span class="eyebrow">{t("logPickTitle")}</span></header>
+        {#if edit}
+          <input bind:value={logPath} placeholder={t("logPickPlaceholder")} onkeydown={(e) => e.key === "Enter" && pickLog()} />
+          <div class="row"><button onclick={pickLog}>{t("logPickBtn")}</button></div>
+          {#if logMsg}<p class="next">{logMsg}</p>{/if}
+          <p class="hint">{t("logPickHint")}</p>
+        {:else}
+          <p class="next">{t("wizHint", { key: keyOf("edit") })}</p>
+        {/if}
+      </section>
+    {/if}
+
     {#if wizard}
       <section class="card">
         <header><span class="eyebrow">{t("welcome")}</span></header>

@@ -50,6 +50,22 @@ pub fn load_saved(config_dir: &Path) -> Option<PathBuf> {
     (!s.is_empty()).then(|| PathBuf::from(s))
 }
 
+/// A path typed or pasted by the user (Explorer's "Copy as path" adds quotes): an existing file named like the game's log.
+pub fn validate(input: &str) -> Result<PathBuf, String> {
+    if input.len() > 520 {
+        return Err("That path is too long".into());
+    }
+    let p = PathBuf::from(input.trim().trim_matches('"'));
+    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if !name.to_ascii_lowercase().ends_with("client.txt") {
+        return Err("That isn't a Client.txt file: it is in the logs folder of the game".into());
+    }
+    if !p.is_file() {
+        return Err("That file doesn't exist".into());
+    }
+    Ok(p)
+}
+
 pub fn save(config_dir: &Path, log: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(config_dir)?;
     std::fs::write(config_dir.join(SETTING_FILE), log.to_string_lossy().as_bytes())
@@ -102,6 +118,22 @@ mod tests {
         std::fs::create_dir_all(dir.join("logs")).unwrap();
         std::fs::write(dir.join("logs").join("Client.txt"), "").unwrap();
         dir
+    }
+
+    #[test]
+    fn a_pasted_path_must_be_an_existing_client_log() {
+        let t = tempfile::tempdir().unwrap();
+        let dir = fake_install(t.path(), "poe");
+        let log = dir.join("logs").join("Client.txt");
+        let quoted = format!("  \"{}\"  ", log.display());
+        assert_eq!(validate(&quoted).unwrap(), log);
+        assert!(validate(&dir.join("logs").join("Other.txt").display().to_string()).is_err());
+        assert!(validate(&dir.join("logs").join("Missing-Client.txt").display().to_string()).unwrap_err().contains("doesn't exist"));
+        assert!(validate("").is_err());
+        assert!(validate(&"a".repeat(600)).is_err());
+        // the saved path is what the watcher uses next
+        save(t.path(), &log).unwrap();
+        assert_eq!(load_saved(t.path()), Some(log));
     }
 
     #[test]

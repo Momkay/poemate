@@ -107,6 +107,13 @@ fn bandit_choice(app: tauri::AppHandle, choice: String) {
 }
 
 #[tauri::command]
+fn set_log_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let p = locator::validate(&path)?;
+    // the watcher looks for a saved path every few seconds while the log is missing
+    locator::save(&app.path().app_config_dir().unwrap_or_default(), &p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn route_step(app: tauri::AppHandle, delta: i32) {
     session::step(delta);
     watcher::refresh(&app);
@@ -236,7 +243,7 @@ pub fn run() {
             watcher::spawn(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, quest_mode, bandit_choice, hotkeys_get, hotkeys_set, layout_load, layout_save])
+        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, quest_mode, set_log_path, bandit_choice, hotkeys_get, hotkeys_set, layout_load, layout_save])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
