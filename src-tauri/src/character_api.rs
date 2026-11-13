@@ -120,15 +120,21 @@ pub struct Diff {
     pub missing_gems: Vec<String>,
 }
 
+/// PoB names a support "Pierce", the game "Pierce Support"; alternate quality gems carry a prefix.
+fn gem_key(name: &str) -> &str {
+    let name = ["Anomalous ", "Divergent ", "Phantasmal "].iter().find_map(|p| name.strip_prefix(p)).unwrap_or(name);
+    name.strip_suffix(" Support").unwrap_or(name)
+}
+
 pub fn diff(plan: &Plan, stage: usize, have: &Synced) -> Diff {
     let planned_nodes: Vec<u32> = plan.stages.iter().take(stage + 1).flat_map(|s| s.passives.iter().map(|p| p.id)).collect();
     let planned: HashSet<u32> = planned_nodes.iter().copied().collect();
     let mut extra: Vec<u32> = have.nodes.iter().copied().filter(|n| !planned.contains(n)).collect();
     extra.sort_unstable();
-    let owned: HashSet<&str> = have.groups.iter().flat_map(|g| g.gems.iter().map(|g| g.name.as_str())).collect();
+    let owned: HashSet<&str> = have.groups.iter().flat_map(|g| g.gems.iter().map(|g| gem_key(&g.name))).collect();
     let mut missing_gems: Vec<String> = Vec::new();
     for g in plan.stages.get(stage).iter().flat_map(|s| &s.gems).filter(|g| g.enabled).flat_map(|g| &g.gems).filter(|g| g.enabled) {
-        if !owned.contains(g.name.as_str()) && !missing_gems.contains(&g.name) {
+        if !owned.contains(gem_key(&g.name)) && !missing_gems.contains(&g.name) {
             missing_gems.push(g.name.clone());
         }
     }
@@ -198,6 +204,15 @@ mod tests {
         assert_eq!(first.gems.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Caustic Arrow", "Added Chaos Damage Support"]);
         assert_eq!((first.gems[0].level, first.gems[0].quality, first.gems[1].support), (12, 5, true));
         assert_eq!(s.groups[1].gems[0].name, "Herald of Agony");
+    }
+
+    #[test]
+    fn gems_match_across_support_suffix_and_quality_prefix() {
+        assert_eq!((gem_key("Pierce Support"), gem_key("Pierce"), gem_key("Anomalous Caustic Arrow")), ("Pierce", "Pierce", "Caustic Arrow"));
+        let mut plan = Plan { class: String::new(), ascendancy: String::new(), bandit: String::new(), pantheon_major: String::new(), pantheon_minor: String::new(), notes: String::new(), auto_order: false, stages: vec![stage(&[], &["Pierce", "Caustic Arrow", "Pride"])] };
+        plan.stages[0].gems[0].gems.truncate(3);
+        let have = Synced { groups: vec![GemGroup { slot: String::new(), enabled: true, gems: ["Pierce Support", "Anomalous Caustic Arrow"].map(|n| Gem { name: n.into(), ..Default::default() }).into() }], ..Default::default() };
+        assert_eq!(diff(&plan, 0, &have).missing_gems, ["Pride"]);
     }
 
     #[test]
