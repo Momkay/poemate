@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import Widget from "$lib/Widget.svelte";
+  import { i18n, t, type Key } from "$lib/i18n.svelte";
   import { layout, loadLayout, resetLayout, saveSoon, sizeKey } from "$lib/layout.svelte";
 
   type Kind = "Normal" | "Notable" | "Keystone" | "Mastery" | "Jewel" | "Root";
@@ -88,7 +89,7 @@
     if (lastLevel && lv > lastLevel) {
       const id = Date.now();
       const pts = plan?.budget != null ? Math.max(0, plan.budget - plan.spent_before) : 0;
-      toasts = [...toasts, { id, text: `Level ${lv}${pts ? ` · ${pts} passive points to spend` : ""}` }].slice(-2);
+      toasts = [...toasts, { id, text: pts ? t("levelToastPoints", { n: lv, p: pts }) : t("levelToast", { n: lv }) }].slice(-2);
       setTimeout(() => (toasts = toasts.filter((t) => t.id !== id)), 6000);
     }
     if (lv) lastLevel = lv;
@@ -99,6 +100,7 @@
   let capturing = $state("");
   let bindMsg = $state("");
   const pretty = (k: string) => k.replace(/Key|Digit|Arrow/g, "");
+  const keyOf = (id: string) => pretty(binds.find((b) => b.id === id)?.keys ?? "");
 
   // turns a key press into the text the backend parses, e.g. "Ctrl+Shift+KeyO"
   async function capture(e: KeyboardEvent, id: string) {
@@ -115,6 +117,18 @@
     capturing = "";
   }
 
+  let ready = $state(false);
+  $effect(() => void (i18n.lang = layout.settings.lang));
+  const wizard = $derived(ready && !layout.settings.onboarded);
+  const setLang = (l: "en" | "nl") => {
+    layout.settings.lang = l;
+    saveSoon();
+  };
+  const finish = () => {
+    layout.settings.onboarded = true;
+    saveSoon();
+  };
+
   let copied = $state("");
   // write-only and only on a user click, so it stays within the GGG overlay rules
   async function copySearch(g: { slot: string; name: string; base: string }) {
@@ -128,10 +142,10 @@
   async function doImport() {
     if (!input.trim() || busy) return;
     busy = true;
-    importMsg = "Importing…";
+    importMsg = t("importing");
     try {
       const s = await invoke<{ class: string; ascendancy: string; stages: number }>("import_build", { input });
-      importMsg = `Loaded ${s.ascendancy || s.class}, ${s.stages} stages`;
+      importMsg = t("loaded", { name: s.ascendancy || s.class, n: s.stages });
       input = "";
     } catch (e) {
       importMsg = String(e);
@@ -141,7 +155,7 @@
   }
 
   onMount(() => {
-    loadLayout();
+    loadLayout().then(() => (ready = true));
     invoke<Binding[]>("hotkeys_get").then((b) => (binds = b));
     const onResize = () => (layout.key = sizeKey());
     window.addEventListener("resize", onResize);
@@ -163,15 +177,15 @@
   <div class="hud">
     {#if snap && snap.log !== "ok"}
       <span class="status">
-        {snap.log === "searching" ? "Looking for Client.txt…" : snap.log === "not-found" ? "Can't find Client.txt" : "Can't read Client.txt"}
+        {snap.log === "searching" ? t("logSearching") : snap.log === "not-found" ? t("logNotFound") : t("logError")}
       </span>
     {:else}
       <span class="lvl">{snap?.state.level || "–"}</span>
       <span class="sep"></span>
-      <span class="area">{snap?.state.area_name || "Waiting for a zone…"}</span>
+      <span class="area">{snap?.state.area_name || t("waitingZone")}</span>
       {#if snap?.state.area_level}
         <span class="sep"></span>
-        <span class="alvl">area {snap.state.area_level}</span>
+        <span class="alvl">{t("areaLevel", { n: snap.state.area_level })}</span>
       {/if}
     {/if}
   </div>
@@ -184,18 +198,18 @@
     {#if route}
       <Widget id="route" {edit}>
       <section class="card">
-        <header><span class="eyebrow">Act {route.act}</span><span class="badge">{route.index + 1} / {route.total}</span></header>
+        <header><span class="eyebrow">{t("act", { n: route.act })}</span><span class="badge">{route.index + 1} / {route.total}</span></header>
         <div class="bar"><i style:width="{((route.index + 1) / route.total) * 100}%"></i></div>
         <h1>{route.step}</h1>
         {#if route.label}<p class="label">{route.label}</p>{/if}
         {#each route.hints as h}<p class="hint-line">{h}</p>{/each}
         {#if route.passive_points > 0}
-          <p class="points">+{route.passive_points} passive point{route.passive_points > 1 ? "s" : ""}</p>
+          <p class="points">{t(route.passive_points > 1 ? "passivePoints" : "passivePoint", { n: route.passive_points })}</p>
         {/if}
         {#each route.rewards as r}
           <p class="reward">
             <span class="av {r.how === 'Take' ? 'take' : 'buy'}">{r.gem[0]}</span>
-            <span class="rtxt"><b>{r.gem}</b><span>{r.how === "Take" ? "Take" : "Buy"} · {r.npc}</span></span>
+            <span class="rtxt"><b>{r.gem}</b><span>{r.how === "Take" ? t("take") : t("buy")} · {r.npc}</span></span>
           </p>
         {/each}
         {#each route.next as n}<p class="next">{n}</p>{/each}
@@ -207,8 +221,8 @@
       <Widget id="passive" {edit}>
       <section class="card" class:panel>
         <header>
-          <span class="eyebrow">{plan.stage_title}{plan.manual ? " · manual" : ""}</span>
-          <span class="badge">{plan.passives_available}/{plan.passives_total} now</span>
+          <span class="eyebrow">{plan.stage_title}{plan.manual ? ` · ${t("manual")}` : ""}</span>
+          <span class="badge">{t("nowBadge", { a: plan.passives_available, b: plan.passives_total })}</span>
         </header>
         {#if panel}
           <p class="counts">
@@ -230,10 +244,10 @@
           </svg>
         {/if}
         {#if plan.budget !== null}
-          <p class="next">≈ {Math.max(0, plan.budget - plan.spent_before)} points to spend (level − 1 + quests)</p>
+          <p class="next">{t("pointsToSpend", { n: Math.max(0, plan.budget - plan.spent_before) })}</p>
         {/if}
         {#if plan.passives.length === 0}
-          <p class="next">No new passives in this stage</p>
+          <p class="next">{t("noPassives")}</p>
         {/if}
         <ol class="list">
           {#each panel ? plan.passives : plan.passives.slice(0, 8) as p}
@@ -244,11 +258,11 @@
             </li>
           {/each}
         </ol>
-        {#if !panel && plan.passives_total > 8}<p class="next">+{plan.passives_total - 8} more · Ctrl+Shift+T for all</p>{/if}
+        {#if !panel && plan.passives_total > 8}<p class="next">{t("moreHint", { n: plan.passives_total - 8, key: keyOf("panel") })}</p>{/if}
         {#each plan.masteries as [name, stats]}
           <p class="mastery">◇ {name}: {stats.join(" · ")}</p>
         {/each}
-        {#if plan.auto_order}<p class="hint">Order is auto-generated</p>{/if}
+        {#if plan.auto_order}<p class="hint">{t("autoOrder")}</p>{/if}
       </section>
       </Widget>
 
@@ -256,8 +270,8 @@
         <Widget id="gems" {edit}>
         <section class="card">
           <header>
-            <span class="eyebrow">Gems</span>
-            {#if plan.new_gems.length}<span class="badge">{plan.new_gems.length} new</span>{/if}
+            <span class="eyebrow">{t("gems")}</span>
+            {#if plan.new_gems.length}<span class="badge">{t("newGems", { n: plan.new_gems.length })}</span>{/if}
           </header>
           {#each links.slice(0, panel ? 12 : 5) as grp}
             <div class="chips">
@@ -266,7 +280,7 @@
               {/each}
             </div>
           {/each}
-          {#if links.length > (panel ? 12 : 5)}<p class="next">+{links.length - (panel ? 12 : 5)} more links</p>{/if}
+          {#if links.length > (panel ? 12 : 5)}<p class="next">{t("moreLinks", { n: links.length - (panel ? 12 : 5) })}</p>{/if}
         </section>
         </Widget>
       {/if}
@@ -274,17 +288,17 @@
       {#if changedGear.length}
         <Widget id="gear" {edit}>
         <section class="card">
-          <header><span class="eyebrow">Gear to look for</span></header>
+          <header><span class="eyebrow">{t("gear")}</span></header>
           <ul class="list">
             {#each changedGear.slice(0, 6) as g}
               <li class:copied={copied === g.slot}>
-                <button class="copy" title="Copy the stash search" onclick={() => copySearch(g)}>
+                <button class="copy" title={t("copyTitle")} onclick={() => copySearch(g)}>
                   <span class="slot">{g.slot}</span><span class="name">{g.name}{g.base ? ` · ${g.base}` : ""}</span>
                 </button>
               </li>
             {/each}
           </ul>
-          <p class="hint">Click an item to copy its stash search</p>
+          <p class="hint">{t("copyHint")}</p>
         </section>
         </Widget>
       {/if}
@@ -292,57 +306,81 @@
       {#if plan.notes.trim() && panel}
         <Widget id="notes" {edit}>
         <section class="card notes">
-          <header><span class="eyebrow">Build notes</span></header>
+          <header><span class="eyebrow">{t("notes")}</span></header>
           <p class="notes-body">{plan.notes}</p>
         </section>
         </Widget>
       {/if}
     {:else if snap && !route}
-      <section class="card"><p class="next">Load a build in edit mode (Ctrl+Shift+O)</p></section>
+      <section class="card"><p class="next">{t("loadBuild", { key: keyOf("edit") })}</p></section>
+    {/if}
+
+    {#if wizard}
+      <section class="card">
+        <header><span class="eyebrow">{t("welcome")}</span></header>
+        {#if edit}
+          <p class="langs">
+            <span class="eyebrow">{t("language")}</span>
+            {#each ["en", "nl"] as const as l}<button class:on={layout.settings.lang === l} onclick={() => setLang(l)}>{l.toUpperCase()}</button>{/each}
+          </p>
+          <ul class="list">
+            <li class:locked={snap?.log !== "ok"}>{snap?.log === "ok" ? "✓" : "○"} {t("wizLog")}</li>
+            <li class:locked={!poeFound}>{poeFound ? "✓" : "○"} {t("wizWindow")}</li>
+            <li class:locked={!plan}>{plan ? "✓" : "○"} {t("wizBuild")}</li>
+          </ul>
+          <div class="row"><button onclick={finish}>{t("wizDone")}</button></div>
+        {:else}
+          <p class="next">{t("wizHint", { key: keyOf("edit") })}</p>
+        {/if}
+      </section>
     {/if}
 
     {#if edit}
       <section class="card editbox">
-        <header><span class="eyebrow">Import build</span></header>
-        <input bind:value={input} placeholder="pobb.in / pastebin link or PoB code" onkeydown={(e) => e.key === "Enter" && doImport()} />
+        <header><span class="eyebrow">{t("importTitle")}</span></header>
+        <input bind:value={input} placeholder={t("importPlaceholder")} onkeydown={(e) => e.key === "Enter" && doImport()} />
         <div class="row">
-          <button onclick={doImport} disabled={busy}>Import</button>
-          <button onclick={() => invoke("route_step", { delta: -1 })}>◀ step</button>
-          <button onclick={() => invoke("route_step", { delta: 1 })}>step ▶</button>
+          <button onclick={doImport} disabled={busy}>{t("importBtn")}</button>
+          <button onclick={() => invoke("route_step", { delta: -1 })}>{t("stepPrev")}</button>
+          <button onclick={() => invoke("route_step", { delta: 1 })}>{t("stepNext")}</button>
         </div>
         {#if importMsg}<p class="next">{importMsg}</p>{/if}
-        <label class="slider">Opacity
+        <label class="slider">{t("opacity")}
           <input type="range" min="0.2" max="1" step="0.05" bind:value={layout.settings.opacity} oninput={saveSoon} />
         </label>
         <div class="row">
           <button onclick={() => { layout.settings.density = layout.settings.density === "cozy" ? "compact" : "cozy"; saveSoon(); }}>
-            {layout.settings.density === "cozy" ? "Compact" : "Cozy"}
+            {layout.settings.density === "cozy" ? t("compact") : t("cozy")}
           </button>
-          <button onclick={resetLayout}>Reset layout</button>
+          <button onclick={resetLayout}>{t("resetLayout")}</button>
         </div>
-        <p class="hint">Drag cards to move · mouse wheel on a card to resize</p>
+        <p class="hint">{t("dragHint")}</p>
+        <p class="langs">
+          <span class="eyebrow">{t("language")}</span>
+          {#each ["en", "nl"] as const as l}<button class:on={layout.settings.lang === l} onclick={() => setLang(l)}>{l.toUpperCase()}</button>{/each}
+        </p>
         <details>
-          <summary class="eyebrow">Hotkeys</summary>
+          <summary class="eyebrow">{t("hotkeys")}</summary>
           <ul class="list">
             {#each binds as b}
               <li>
-                <span class="slot">{b.label}</span>
+                <span class="slot">{t(`act.${b.id}` as Key)}</span>
                 <button class="key" onclick={() => (capturing = b.id)} onkeydown={(e) => capturing === b.id && capture(e, b.id)} onblur={() => (capturing = "")}>
-                  {capturing === b.id ? "Press keys…" : pretty(b.keys)}
+                  {capturing === b.id ? t("pressKeys") : pretty(b.keys)}
                 </button>
               </li>
             {/each}
           </ul>
           {#if bindMsg}<p class="next warn">{bindMsg}</p>{/if}
-          <p class="hint">Click a key, then press the new combination (needs Ctrl, Alt or Shift). Esc cancels.</p>
+          <p class="hint">{t("hotkeyHint")}</p>
         </details>
-        <p class="hint">This product isn't affiliated with or endorsed by Grinding Gear Games in any way. It only reads Client.txt and never sends input to the game.</p>
+        <p class="hint">{t("disclaimer")}</p>
       </section>
     {:else}
-      <p class="foot">Ctrl+Shift+O edit · Ctrl+Shift+H hide</p>
+      <p class="foot">{t("footer", { edit: keyOf("edit"), hide: keyOf("hide") })}</p>
     {/if}
     {#if !poeFound}
-      <p class="foot warn">Path of Exile not found — start it in Windowed or Borderless mode</p>
+      <p class="foot warn">{t("noPoe")}</p>
     {/if}
   </div>
 </main>
@@ -727,6 +765,18 @@
   summary {
     margin-top: 10px;
     cursor: pointer;
+  }
+  .langs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .langs .eyebrow {
+    margin-right: auto;
+  }
+  .langs button.on {
+    background: var(--blurple);
   }
   button.key {
     padding: 2px 8px;

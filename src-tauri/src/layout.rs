@@ -16,15 +16,20 @@ pub struct WidgetPos {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct Settings {
     pub opacity: f32,
     /// "cozy" | "compact"
     pub density: String,
+    /// "en" | "nl"
+    pub lang: String,
+    /// the first-run setup card was finished
+    pub onboarded: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { opacity: 0.72, density: "cozy".into() }
+        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false }
     }
 }
 
@@ -46,6 +51,9 @@ impl Layout {
         self.settings.opacity = clamp(self.settings.opacity, 0.2, 1.0);
         if !["cozy", "compact"].contains(&self.settings.density.as_str()) {
             self.settings.density = "cozy".into();
+        }
+        if !["en", "nl"].contains(&self.settings.lang.as_str()) {
+            self.settings.lang = "en".into();
         }
         self.all.retain(|k, _| k.len() <= 16);
         trim(&mut self.all, MAX_KEYS);
@@ -106,11 +114,11 @@ mod tests {
     #[test]
     fn values_are_clamped_and_junk_is_dropped() {
         let mut l = Layout::default();
-        l.settings = Settings { opacity: 7.0, density: "gigantic".into() };
+        l.settings = Settings { opacity: 7.0, density: "gigantic".into(), lang: "xx".into(), ..Settings::default() };
         l.all.insert("a_very_long_resolution_key".into(), HashMap::new());
         l.all.insert("800x600".into(), HashMap::from([("w".to_string(), pos(f32::NAN, 1e9, -3.0))]));
         let s = l.sanitized();
-        assert_eq!((s.settings.opacity, s.settings.density.as_str()), (1.0, "cozy"));
+        assert_eq!((s.settings.opacity, s.settings.density.as_str(), s.settings.lang.as_str()), (1.0, "cozy", "en"));
         assert_eq!(s.all.len(), 1);
         let p = &s.all["800x600"]["w"];
         assert_eq!((p.x, p.y, p.scale), (-2000.0, 8000.0, 0.5));
