@@ -313,6 +313,8 @@ impl Session {
 pub fn init(cfg: PathBuf) {
     let mut s = SESSION.lock().unwrap();
     s.league_start = crate::layout::load(&cfg).settings.quests == "all";
+    // no build yet (or none at all): the route still needs its flags, or the bandit steps of acts 2 and 10 vanish
+    s.flags = flags_for("None", s.league_start);
     s.cfg = cfg;
 }
 
@@ -516,6 +518,22 @@ mod tests {
         s.on_event(&Event::LevelChanged { level: 33 }, 33);
         let v = s.views(33).plan.unwrap();
         assert_eq!((v.stage_title.as_str(), v.manual), ("2) Normal Lab", false)); // auto stage changed: override cleared
+    }
+
+    #[test]
+    fn the_route_works_without_any_build() {
+        let t = tempfile::tempdir().unwrap();
+        let mut s = Session { cfg: t.path().to_path_buf(), flags: flags_for("None", false), ..Default::default() };
+        s.on_event(&Event::AreaChanged { id: "1_1_town".into(), name: "Lioneye's Watch".into(), level: 1, town: true }, 1);
+        let v = s.views(1);
+        assert!(v.plan.is_none());
+        let r = v.route.unwrap();
+        assert_eq!(r.label, "Enemy at the Gate");
+        assert!(r.rewards.is_empty(), "no build, no wanted gems");
+        // without flags the bandit decision of act 2 is missing from the route: that is why init sets them
+        let with = Engine::new(&ROUTE, &flags_for("None", false), Progress::default()).len();
+        let without = Engine::new(&ROUTE, &HashSet::new(), Progress::default()).len();
+        assert_ne!(with, without);
     }
 
     #[test]
