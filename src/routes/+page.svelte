@@ -311,6 +311,10 @@
       <section class="card"><p class="next">{t("loadBuild", { key: keyOf("edit") })}</p></section>
     {/if}
 
+  </div>
+
+  <!-- settings sit bottom right: the top left is where people keep their own panels -->
+  <aside class="settings">
     {#if wizard}
       <section class="card">
         <header><span class="eyebrow">{t("welcome")}</span></header>
@@ -372,13 +376,14 @@
         </details>
         <p class="hint">{t("disclaimer")}</p>
       </section>
-    {:else}
+    {/if}
+    {#if !edit}
       <p class="foot">{t("footer", { edit: keyOf("edit"), hide: keyOf("hide") })}</p>
     {/if}
     {#if !poeFound}
       <p class="foot warn">{t("noPoe")}</p>
     {/if}
-  </div>
+  </aside>
 </main>
 
 <style>
@@ -596,6 +601,17 @@
     font-size: 12px;
     color: var(--green);
   }
+  .settings {
+    position: absolute;
+    right: 18px;
+    bottom: 19vh; /* above the game's mana orb */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 300px;
+    max-height: calc(81vh - 18px);
+    overflow-y: auto;
+  }
   .card.panel {
     width: 560px;
   }
@@ -783,7 +799,8 @@
     color: var(--muted);
   }
   .foot {
-    padding-left: 4px;
+    margin-top: 0;
+    text-align: right;
   }
   .warn {
     color: var(--yellow);
