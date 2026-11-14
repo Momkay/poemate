@@ -82,6 +82,8 @@ pub struct PassiveView {
     pub known: bool,
     /// the estimated point budget covers it (always true when the level is unknown)
     pub available: bool,
+    /// roughly the level that pays for it when it is not available yet (one point per level, quests not counted)
+    pub unlock: Option<u32>,
     /// the synced character has this point
     pub taken: bool,
 }
@@ -329,6 +331,16 @@ impl Session {
                     _ => false,
                 })
                 .collect();
+            let have = budget.map(|b| b.saturating_sub(spent_before));
+            let mut need = 0;
+            let unlock: Vec<Option<u32>> = s
+                .passives
+                .iter()
+                .map(|x| {
+                    need += cost(x);
+                    have.filter(|h| need > *h).map(|h| level + need - h)
+                })
+                .collect();
             Some(PlanView {
                 passives_available: available.iter().filter(|a| **a).count(),
                 budget,
@@ -352,9 +364,9 @@ impl Session {
                 passives: s
                     .passives
                     .iter()
-                    .zip(&available)
+                    .zip(available.iter().zip(&unlock))
                     .take(MAX_PASSIVES_SHOWN)
-                    .map(|(x, a)| PassiveView { name: x.name.clone(), kind: x.kind, stats: x.stats.clone(), known: x.known, available: *a, taken: self.synced.as_ref().is_some_and(|c| c.nodes.contains(&x.id)) })
+                    .map(|(x, (a, u))| PassiveView { name: x.name.clone(), kind: x.kind, stats: x.stats.clone(), known: x.known, available: *a, unlock: *u, taken: self.synced.as_ref().is_some_and(|c| c.nodes.contains(&x.id)) })
                     .collect(),
                 masteries: s.masteries.clone(),
                 new_gems: s.new_gems.clone(),
@@ -620,6 +632,8 @@ mod tests {
         assert_eq!(early.passives_available, 4);
         assert_eq!(early.passives.iter().filter(|p| p.available).count(), 4);
         assert!(early.passives.iter().take(4).all(|p| p.available) && !early.passives[4].available);
+        // the fifth point needs one more level than the four it can afford
+        assert_eq!((early.passives[0].unlock, early.passives[4].unlock), (None, Some(6)));
         // a quest hand-in adds a point: Dweller of the Deep is a1q7
         s.cursor = ROUTE.steps.iter().filter(|x| x.applies(&s.flags)).position(|x| x.label == "The Dweller of the Deep").unwrap() + 1;
         assert_eq!(s.views(5).plan.unwrap().budget, Some(5));

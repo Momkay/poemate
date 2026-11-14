@@ -33,7 +33,7 @@ export type Snapshot = {
       budget: number | null;
       spent_before: number;
       tree: { x: number; y: number; from: [number, number] | null; kind: Kind; state: "done" | "now" | "later" }[];
-      passives: { name: string; kind: Kind; stats: string[]; known: boolean; available: boolean; taken: boolean }[];
+      passives: { name: string; kind: Kind; stats: string[]; known: boolean; available: boolean; unlock: number | null; taken: boolean }[];
       masteries: [string, string[]][];
       new_gems: string[];
       gems: { name: string; support: boolean }[][];
