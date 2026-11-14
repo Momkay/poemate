@@ -503,6 +503,8 @@
     align-items: baseline;
     width: 100%;
     padding: 0;
+    border: 0;
+    font: inherit;
     background: none;
     color: inherit;
     text-align: left;

@@ -517,6 +517,31 @@ pub fn restore() {
     }
 }
 
+/// Blocking: fetches the public profile and replaces the synced character. Returns "name (lvl N)".
+pub fn sync_character(account: &str, character: &str) -> Result<String, String> {
+    let cfg = SESSION.lock().unwrap().cfg.clone();
+    use crate::character_api::{PRIVATE, fetch_public};
+    let (account, character) = (account.trim(), character.trim());
+    // the cookie is only sent when the public read was refused, and then once
+    let (mut c, via) = match fetch_public(account, character, None) {
+        Err(e) if e == PRIVATE => match crate::secret::get() {
+            Some(k) => (fetch_public(account, character, Some(&k))?, "POESESSID"),
+            None => return Err(e),
+        },
+        r => (r?, "public profile"),
+    };
+    if let Ok(t) = tree::load(&cfg, false, tree::download) {
+        c.drop_free(&t);
+    }
+    let out = format!("{} (lvl {}) · {via}", c.name, c.level);
+    SESSION.lock().unwrap().synced = Some(c);
+    Ok(out)
+}
+
+pub fn clear_character() {
+    SESSION.lock().unwrap().synced = None;
+}
+
 /// Reads `character.json` if present; a bad file is reported and ignored.
 fn load_character(cfg: &Path) {
     let Ok(text) = std::fs::read_to_string(cfg.join(CHARACTER_FILE)) else { return };

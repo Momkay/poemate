@@ -33,11 +33,14 @@ pub struct Settings {
     pub bandit: String,
     /// correction on the estimated passive points to spend, for when the estimate is off
     pub points_adjust: i32,
+    /// public-profile sync: account name (with #1234 if shown) and character
+    pub account: String,
+    pub character: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false, quests: "essential".into(), bandit: "build".into(), points_adjust: 0 }
+        Self { opacity: 0.72, density: "cozy".into(), lang: "en".into(), onboarded: false, quests: "essential".into(), bandit: "build".into(), points_adjust: 0, account: String::new(), character: String::new() }
     }
 }
 

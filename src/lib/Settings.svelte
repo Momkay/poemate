@@ -65,6 +65,45 @@
   }
   const removeBuild = () => invoke("remove_build").then(() => (buildMsg = ""));
 
+  let syncMsg = $state("");
+  let syncing = $state(false);
+  let synced = $state("");
+  async function removeCharacter() {
+    await invoke("remove_character");
+    synced = syncMsg = "";
+    layout.settings.account = layout.settings.character = "";
+    saveSoon();
+  }
+  async function syncCharacter() {
+    if (syncing) return;
+    syncing = true;
+    syncMsg = t("importing");
+    try {
+      const what = await invoke<string>("sync_character", { account: layout.settings.account, character: layout.settings.character });
+      syncMsg = "";
+      synced = what;
+    } catch (e) {
+      syncMsg = String(e);
+    } finally {
+      syncing = false;
+    }
+  }
+
+  let cookie = $state("");
+  let cookieSaved = $state(false);
+  let cookieMsg = $state("");
+  onMount(() => void invoke<boolean>("session_cookie_has").then((v) => (cookieSaved = v)).catch(() => {}));
+  async function setCookie(value: string) {
+    try {
+      await invoke("session_cookie_set", { value });
+      cookieSaved = !!value.trim();
+      cookie = "";
+      cookieMsg = "";
+    } catch (e) {
+      cookieMsg = String(e);
+    }
+  }
+
   // ---- route ----
   const setQuests = (q: string) => {
     layout.settings.quests = q as "essential" | "all";
@@ -173,6 +212,35 @@
           {#if buildMsg}<p class="msg">{buildMsg}</p>{/if}
           <p class="help">{t("buildNoneHint")}</p>
         {/if}
+      </div>
+
+      <div class="group">
+        <h3>{t("charTitle")}</h3>
+        {#if synced}
+          <div class="row">
+            <span class="dot ok"></span>
+            <div class="l"><span>{synced}</span></div>
+            <button class="ghost" onclick={removeCharacter}>{t("charRemove")}</button>
+          </div>
+        {/if}
+        <div class="row stack">
+          <input bind:value={layout.settings.account} oninput={saveSoon} placeholder={t("charAccount")} aria-label={t("charAccount")} />
+          <input bind:value={layout.settings.character} oninput={saveSoon} placeholder={t("charName")} aria-label={t("charName")} onkeydown={(e) => e.key === "Enter" && syncCharacter()} />
+          <button class="primary" onclick={syncCharacter} disabled={syncing || !layout.settings.account.trim() || !layout.settings.character.trim()}>{t("charSync")}</button>
+        </div>
+        {#if syncMsg}<p class="msg">{syncMsg}</p>{/if}
+        <p class="help">{t("charHint")}</p>
+        <div class="row stack">
+          {#if cookieSaved}
+            <span class="l"><small>{t("cookieStored")}</small></span>
+            <button class="ghost" onclick={() => setCookie("")}>{t("cookieRemove")}</button>
+          {:else}
+            <input type="password" autocomplete="off" bind:value={cookie} placeholder={t("cookieLabel")} aria-label={t("cookieLabel")} onkeydown={(e) => e.key === "Enter" && setCookie(cookie)} />
+            <button class="primary" onclick={() => setCookie(cookie)} disabled={!cookie.trim()}>{t("cookieSave")}</button>
+          {/if}
+        </div>
+        {#if cookieMsg}<p class="msg">{cookieMsg}</p>{/if}
+        <p class="help">{t("cookieHint")}</p>
       </div>
     {:else if tab === "route"}
       <div class="group">
@@ -480,7 +548,8 @@
     font-size: 16px;
     line-height: 1;
   }
-  input:not([type]) {
+  input:not([type]),
+  input[type="password"] {
     width: 100%;
     box-sizing: border-box;
     padding: 10px 12px;

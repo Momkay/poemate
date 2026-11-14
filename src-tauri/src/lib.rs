@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 mod character_api;
+mod secret;
 mod events;
 mod hotkeys;
 mod layout;
@@ -71,6 +72,29 @@ async fn import_build(app: tauri::AppHandle, input: String) -> Result<session::I
     let out = tauri::async_runtime::spawn_blocking(move || session::import(&input)).await.map_err(|e| e.to_string())??;
     watcher::refresh(&app);
     Ok(out)
+}
+
+#[tauri::command]
+async fn sync_character(app: tauri::AppHandle, account: String, character: String) -> Result<String, String> {
+    let out = tauri::async_runtime::spawn_blocking(move || session::sync_character(&account, &character)).await.map_err(|e| e.to_string())??;
+    watcher::refresh(&app);
+    Ok(out)
+}
+
+#[tauri::command]
+fn remove_character(app: tauri::AppHandle) {
+    session::clear_character();
+    watcher::refresh(&app);
+}
+
+#[tauri::command]
+fn session_cookie_set(value: String) -> Result<(), String> {
+    secret::set(&value)
+}
+
+#[tauri::command]
+fn session_cookie_has() -> bool {
+    secret::get().is_some()
 }
 
 #[tauri::command]
@@ -305,7 +329,7 @@ pub fn run() {
             watcher::spawn(app.handle().clone());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, route_step, plan_stage, is_edit, exit_edit, hotkeys_reset, quest_mode, remove_build, set_log_path, bandit_choice, points_adjust, hotkeys_get, hotkeys_set, layout_load, layout_save])
+        .invoke_handler(tauri::generate_handler![watcher::snapshot, import_build, sync_character, remove_character, session_cookie_set, session_cookie_has, route_step, plan_stage, is_edit, exit_edit, hotkeys_reset, quest_mode, remove_build, set_log_path, bandit_choice, points_adjust, hotkeys_get, hotkeys_set, layout_load, layout_save])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

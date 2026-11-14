@@ -31,13 +31,15 @@ struct Raw {
 struct RawPassives {
     hashes: Vec<u32>,
     hashes_ex: Vec<u32>,
-    mastery_effects: std::collections::HashMap<String, u32>,
+    // an object; the site sends `[]` when empty and may send the effect id as a string
+    mastery_effects: serde_json::Value,
     bandit_choice: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
 struct RawItem {
+    #[serde(alias = "inventoryId")]
     inventory_id: String,
     sockets: Vec<RawSocket>,
     #[serde(rename = "socketedItems")]
@@ -82,7 +84,11 @@ pub struct Synced {
 }
 
 pub fn parse(json: &str) -> Result<Synced, serde_json::Error> {
-    let Raw { name, class, level, equipment, passives } = serde_json::from_str::<Envelope>(json)?.character;
+    Ok(assemble(serde_json::from_str::<Envelope>(json)?.character))
+}
+
+fn assemble(raw: Raw) -> Synced {
+    let Raw { name, class, level, equipment, passives } = raw;
     let mut groups = Vec::new();
     for item in equipment {
         // gems link when their sockets share a group number; one GemGroup per linked set, labelled by the slot
@@ -98,9 +104,60 @@ pub fn parse(json: &str) -> Result<Synced, serde_json::Error> {
         }
         groups.extend(by_group.into_iter().map(|(_, gems)| GemGroup { slot: item.inventory_id.clone(), enabled: true, gems }));
     }
-    let masteries = passives.mastery_effects.iter().filter_map(|(k, v)| Some((k.parse().ok()?, *v))).collect();
+    let masteries = passives.mastery_effects.as_object().into_iter().flatten().filter_map(|(k, v)| Some((k.parse().ok()?, v.as_u64().or_else(|| v.as_str()?.parse().ok())? as u32))).collect();
     let nodes = passives.hashes.into_iter().chain(passives.hashes_ex).collect();
-    Ok(Synced { name, class, level, nodes, masteries, bandit: passives.bandit_choice, groups })
+    Synced { name, class, level, nodes, masteries, bandit: passives.bandit_choice, groups }
+}
+
+/// The two website responses (`get-items`, `get-passive-skills`) of a public profile, the same result as `parse`.
+pub fn parse_public(items: &str, passives: &str) -> Result<Synced, serde_json::Error> {
+    #[derive(Deserialize, Default)]
+    #[serde(default)]
+    struct Items {
+        items: Vec<RawItem>,
+        character: Raw,
+    }
+    let Items { items, character } = serde_json::from_str(items)?;
+    Ok(assemble(Raw { equipment: items, passives: serde_json::from_str(passives)?, ..character }))
+}
+
+fn enc(s: &str) -> String {
+    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
+/// Shown when the site answers 403; the caller may then try again once with a stored cookie.
+pub const PRIVATE: &str = "Profile not readable: make the characters tab public in your account settings (or save your POESESSID below), and check both names";
+
+/// Blocking. Reads a profile of the PoE1 realm: two GETs, no retry. Public profiles need no login; `cookie` (POESESSID) is for private ones.
+/// Any 4xx stops here; the site rate-limits per IP (15 requests per 60 s at the time of writing).
+pub fn fetch_public(account: &str, character: &str, cookie: Option<&str>) -> Result<Synced, String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(concat!("PoeMate/", env!("CARGO_PKG_VERSION"), " (public profile sync)"))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let get = |page: &str| -> Result<String, String> {
+        let url = format!("https://www.pathofexile.com/character-window/{page}?accountName={}&character={}&realm=pc", enc(account), enc(character));
+        let mut req = client.get(url);
+        if let Some(c) = cookie {
+            req = req.header("Cookie", format!("POESESSID={c}"));
+        }
+        let resp = req.send().map_err(|_| "Couldn't reach pathofexile.com (offline or timed out)".to_string())?;
+        match resp.status().as_u16() {
+            200 => {}
+            403 => return Err(PRIVATE.into()),
+            404 => return Err("Account or character not found".into()),
+            429 => return Err("Too many requests: wait a minute and try again".into()),
+            n => return Err(format!("pathofexile.com answered {n}")),
+        }
+        let mut body = Vec::new();
+        std::io::Read::read_to_end(&mut std::io::Read::take(resp, 4_000_000), &mut body).map_err(|e| e.to_string())?;
+        String::from_utf8(body).map_err(|e| e.to_string())
+    };
+    let items = get("get-items")?;
+    let passives = get("get-passive-skills")?;
+    parse_public(&items, &passives).map_err(|e| format!("Unexpected answer from pathofexile.com: {e}"))
 }
 
 impl Synced {
@@ -222,6 +279,19 @@ mod tests {
         let mut s = Synced { nodes: HashSet::from([1, 100, 999]), ..Default::default() };
         s.drop_free(&tree);
         assert_eq!(s.nodes, HashSet::from([100, 999]));
+    }
+
+    #[test]
+    fn public_profile_responses_are_read_like_the_api_ones() {
+        let items = r#"{"items":[{"inventoryId":"Helm","sockets":[{"group":0},{"group":0}],"socketedItems":[{"typeLine":"Caustic Arrow","support":false,"socket":0,"properties":[{"name":"Level","values":[["12",0]]}]},{"typeLine":"Pierce Support","support":true,"socket":1}]}],"character":{"name":"Momkay","class":"Deadeye","level":40}}"#;
+        let passives = r#"{"hashes":[10,20],"hashes_ex":[30],"mastery_effects":{"5":"77"}}"#;
+        assert!(parse_public(items, r#"{"hashes":[],"mastery_effects":[]}"#).unwrap().masteries.is_empty());
+        let s = parse_public(items, passives).unwrap();
+        assert_eq!((s.name.as_str(), s.class.as_str(), s.level), ("Momkay", "Deadeye", 40));
+        assert_eq!(s.nodes, HashSet::from([10, 20, 30]));
+        assert_eq!(s.masteries, [(5, 77)]);
+        assert_eq!((s.groups[0].slot.as_str(), s.groups[0].gems.len(), s.groups[0].gems[0].level), ("Helm", 2, 12));
+        assert_eq!(enc("Momkay#1234"), "Momkay%231234");
     }
 
     #[test]
